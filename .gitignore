@@ -42,7 +42,7 @@ logs/
 
 # Build outputs
 build/
-dist/
+# dist/  # 临时注释，用于部署
 out/
 .next/
 *.egg-info/
@@ -67,8 +67,9 @@ coverage.xml
 .dockerignore
 
 # Production builds
+.next/
 */out/
-dist/
+# dist/  # 临时注释，用于部署
 
 # Debug
 npm-debug.log*
@@ -124,6 +125,36 @@ node_modules/
 # DynamoDB Local files
 .dynamodb/
 
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+
 # temp files
 tmp/
-temp/ 
+temp/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/ 

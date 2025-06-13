@@ -1,7 +1,7 @@
 name = "text-generation-chat"
 compatibility_date = "2024-01-15"
 
-# Pages 配置 - 使用根目录的 dist 文件夹
+# Pages 输出目录配置
 pages_build_output_dir = "dist"
 
 [env.production.vars]
