@@ -1,0 +1,56 @@
+name: Deploy Frontend to Cloudflare Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'frontend/**'
+      - 'build.sh'
+      - 'wrangler.toml'
+      - 'package.json'
+  pull_request:
+    branches: [ main ]
+    paths: 
+      - 'frontend/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'frontend/package-lock.json'
+        
+    - name: Make build script executable
+      run: chmod +x build.sh
+      
+    - name: Build application
+      run: ./build.sh
+      env:
+        NODE_VERSION: '18'
+        NEXT_PUBLIC_API_URL: 'https://api-text-generation.runpod.app'
+        NEXT_PUBLIC_R2_BUCKET: 'text-generation'
+        
+    - name: Verify build output
+      run: |
+        echo "📁 Build output verification:"
+        ls -la dist/
+        echo "📄 Index file check:"
+        head -5 dist/index.html
+        
+    - name: Deploy to Cloudflare Pages
+      uses: cloudflare/pages-action@v1
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        projectName: text-generation-chat
+        directory: dist
+        gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+        wranglerVersion: '3' 

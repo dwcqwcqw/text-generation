@@ -1,0 +1,10 @@
+name = "text-generation-chat"
+compatibility_date = "2024-01-15"
+
+# Pages 配置 - 使用根目录的 dist 文件夹
+pages_build_output_dir = "dist"
+
+[env.production.vars]
+NODE_VERSION = "18"
+NEXT_PUBLIC_API_URL = "https://api-text-generation.runpod.app"
+NEXT_PUBLIC_R2_BUCKET = "text-generation" 

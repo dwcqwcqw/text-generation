@@ -1,0 +1,13 @@
+{
+  "name": "text-generation-chat",
+  "version": "1.0.0",
+  "description": "AI Text Generation Chat Application",
+  "scripts": {
+    "build": "./build.sh",
+    "install-deps": "cd frontend && npm ci",
+    "build-frontend": "cd frontend && npm run build"
+  },
+  "keywords": ["ai", "chat", "text-generation", "nextjs"],
+  "author": "Your Name",
+  "license": "MIT"
+} 
