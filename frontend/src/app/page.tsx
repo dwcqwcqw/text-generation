@@ -29,16 +29,16 @@ interface Model {
 
 const models: Model[] = [
   {
-    id: 'microsoft/DialoGPT-medium',
-    name: 'DialoGPT Medium',
-    description: 'Microsoft DialoGPT conversation model',
-    parameters: '117M'
+    id: 'L3.2-8X3B',
+    name: 'Llama-3.2-8X3B',
+    description: 'Dark Champion Instruct MOE (18.4B parameters)',
+    parameters: '18.4B'
   },
   {
-    id: 'gpt2',
-    name: 'GPT-2',
-    description: 'OpenAI GPT-2 text generation model',
-    parameters: '124M'
+    id: 'L3.2-8X4B',
+    name: 'Llama-3.2-8X4B',
+    description: 'Dark Champion Instruct V2 MOE (21B parameters)',
+    parameters: '21B'
   }
 ]
 
@@ -82,6 +82,11 @@ export default function ChatPage() {
   }, [currentSession?.messages])
 
   const createNewChat = () => {
+    // 如果当前已经是空的新对话，就不创建新的
+    if (currentSession && currentSession.messages.length === 0) {
+      return
+    }
+    
     const newSession: ChatSession = {
       id: Date.now().toString(),
       title: 'New Chat',
@@ -93,10 +98,34 @@ export default function ChatPage() {
     setCurrentSession(newSession)
   }
 
+  const generateChatTitle = (firstMessage: string): string => {
+    // 移除标点符号并分割成单词
+    const words = firstMessage.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(word => word.length > 2) // 过滤掉短词
+    
+    // 常见停用词
+    const stopWords = ['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use']
+    
+    // 过滤停用词
+    const meaningfulWords = words.filter(word => !stopWords.includes(word))
+    
+    // 取前5个有意义的单词，如果不够就用原始单词
+    const titleWords = meaningfulWords.length >= 5 
+      ? meaningfulWords.slice(0, 5)
+      : words.slice(0, 5)
+    
+    // 首字母大写
+    const title = titleWords
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+    
+    return title || 'New Chat'
+  }
+
   const updateSessionTitle = (session: ChatSession, firstMessage: string) => {
-    const title = firstMessage.length > 30 
-      ? firstMessage.substring(0, 30) + '...' 
-      : firstMessage
+    const title = generateChatTitle(firstMessage)
     
     setChatSessions(prev => 
       prev.map(s => 
