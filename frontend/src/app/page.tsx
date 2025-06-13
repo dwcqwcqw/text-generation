@@ -168,34 +168,46 @@ export default function ChatPage() {
   const generateResponse = async (userInput: string, history: Message[] = []) => {
     setIsLoading(true)
 
-    // RunPod API 配置 - 尝试多种环境变量名称
+    // RunPod API 配置 - 使用最兼容的方式读取环境变量
     const RUNPOD_API_KEY = process.env.NEXT_PUBLIC_RUNPOD_API_KEY || 
                           process.env.RUNPOD_API_KEY || 
-                          ''
+                          '' // 如果都没有设置，使用空字符串
+    
     const RUNPOD_ENDPOINT_ID = process.env.NEXT_PUBLIC_RUNPOD_ENDPOINT_ID || 
                               process.env.RUNPOD_ENDPOINT_ID || 
                               '4cx6jtjdx6hdhr'
+    
     const VITE_API_BASE_URL = process.env.NEXT_PUBLIC_VITE_API_BASE_URL || 
                              process.env.VITE_API_BASE_URL || 
                              'https://api.runpod.ai/v2'
+    
     const RUNPOD_ENDPOINT = `${VITE_API_BASE_URL}/${RUNPOD_ENDPOINT_ID}/runsync`
     
-    // 环境变量调试信息
+    // 详细环境变量调试信息
     console.log('Environment Variables Debug:', {
-      NEXT_PUBLIC_RUNPOD_API_KEY: process.env.NEXT_PUBLIC_RUNPOD_API_KEY ? 'SET' : 'NOT SET',
-      RUNPOD_API_KEY: process.env.RUNPOD_API_KEY ? 'SET' : 'NOT SET',
-      NEXT_PUBLIC_RUNPOD_ENDPOINT_ID: process.env.NEXT_PUBLIC_RUNPOD_ENDPOINT_ID || 'NOT SET',
-      RUNPOD_ENDPOINT_ID: process.env.RUNPOD_ENDPOINT_ID || 'NOT SET',
-      NEXT_PUBLIC_VITE_API_BASE_URL: process.env.NEXT_PUBLIC_VITE_API_BASE_URL || 'NOT SET',
-      VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || 'NOT SET',
-      finalApiKey: RUNPOD_API_KEY ? 'CONFIGURED' : 'NOT CONFIGURED',
-      finalEndpoint: RUNPOD_ENDPOINT
+      'process.env': typeof process.env,
+      'NEXT_PUBLIC_RUNPOD_API_KEY': process.env.NEXT_PUBLIC_RUNPOD_API_KEY || 'NOT SET',
+      'RUNPOD_API_KEY': process.env.RUNPOD_API_KEY || 'NOT SET', 
+      'NEXT_PUBLIC_RUNPOD_ENDPOINT_ID': process.env.NEXT_PUBLIC_RUNPOD_ENDPOINT_ID || 'NOT SET',
+      'RUNPOD_ENDPOINT_ID': process.env.RUNPOD_ENDPOINT_ID || 'NOT SET',
+      'NEXT_PUBLIC_VITE_API_BASE_URL': process.env.NEXT_PUBLIC_VITE_API_BASE_URL || 'NOT SET',
+      'VITE_API_BASE_URL': process.env.VITE_API_BASE_URL || 'NOT SET',
+      'All env keys': Object.keys(process.env).filter(key => key.includes('RUNPOD') || key.includes('VITE')),
+      'finalApiKey': RUNPOD_API_KEY ? `CONFIGURED (${RUNPOD_API_KEY.substring(0, 10)}...)` : 'NOT CONFIGURED',
+      'finalEndpoint': RUNPOD_ENDPOINT,
+      'finalEndpointId': RUNPOD_ENDPOINT_ID
     })
     
-    // 如果没有配置API Key，直接使用模拟模式
-    if (!RUNPOD_API_KEY) {
-      console.log('No RunPod API key configured, using simulated responses')
-    }
+    // 临时硬编码测试 - 如果环境变量完全无法读取，使用这个
+    const FALLBACK_API_KEY = 'rpa_YT0BFBFZYAZM90qZoMzEGfv4rNRGlxCEzJpKFFEWyQXOe'
+    const FINAL_API_KEY = RUNPOD_API_KEY || FALLBACK_API_KEY
+    
+    console.log('Using API Key:', FINAL_API_KEY ? `${FINAL_API_KEY.substring(0, 10)}...` : 'NONE')
+    
+          // 如果没有配置API Key，直接使用模拟模式
+      if (!FINAL_API_KEY) {
+        console.log('No RunPod API key configured, using simulated responses')
+      }
     
     try {
       console.log('RunPod API Configuration:', {
@@ -223,7 +235,7 @@ export default function ChatPage() {
       const llama_prompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful, harmless, and honest assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${userInput}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`
 
       // 首先尝试RunPod API调用（如果有API Key）
-      if (RUNPOD_API_KEY) {
+      if (FINAL_API_KEY) {
         try {
           const requestPayload = {
             input: {
@@ -248,7 +260,7 @@ export default function ChatPage() {
           const response = await fetch(RUNPOD_ENDPOINT, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${RUNPOD_API_KEY}`,
+              'Authorization': `Bearer ${FINAL_API_KEY}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(requestPayload)
