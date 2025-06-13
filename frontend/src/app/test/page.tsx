@@ -1,14 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function TestPage() {
   const [testResult, setTestResult] = useState('')
   const [loading, setLoading] = useState(false)
-  const [apiKey, setApiKey] = useState('rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb')
+  const [apiKey, setApiKey] = useState('')
   const [endpoint, setEndpoint] = useState('https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync')
   const [endpointId, setEndpointId] = useState('4cx6jtjdx6hdhr')
   const [prompt, setPrompt] = useState('Hello, how are you today?')
+
+  useEffect(() => {
+    // 从localStorage加载保存的API Key
+    const savedApiKey = localStorage.getItem('runpod_api_key')
+    if (savedApiKey) {
+      setApiKey(savedApiKey)
+    }
+  }, [])
+
+  const saveApiKey = () => {
+    if (apiKey) {
+      localStorage.setItem('runpod_api_key', apiKey)
+      setTestResult('✅ API Key已保存到本地存储!')
+    }
+  }
 
   const testRunPodAPI = async () => {
     setLoading(true)
@@ -150,18 +165,29 @@ export default function TestPage() {
           <h2 className="text-xl font-semibold mb-4">API 配置</h2>
           
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                API Key:
-              </label>
-              <input
-                type="text"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="rpa_..."
-              />
-            </div>
+                         <div>
+               <label className="block text-sm font-medium text-gray-700 mb-2">
+                 API Key:
+               </label>
+               <div className="flex space-x-2">
+                 <input
+                   type="text"
+                   value={apiKey}
+                   onChange={(e) => setApiKey(e.target.value)}
+                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb"
+                 />
+                 <button
+                   onClick={saveApiKey}
+                   className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                 >
+                   保存
+                 </button>
+               </div>
+               <p className="text-xs text-gray-500 mt-1">
+                 API Key将保存在浏览器本地存储中，请输入: rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb
+               </p>
+             </div>
             
                          <div>
                <label className="block text-sm font-medium text-gray-700 mb-2">
