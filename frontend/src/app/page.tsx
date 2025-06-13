@@ -170,7 +170,9 @@ export default function ChatPage() {
 
     // RunPod API 配置
     const RUNPOD_API_KEY = process.env.NEXT_PUBLIC_RUNPOD_API_KEY || ''
-    const RUNPOD_ENDPOINT = 'https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync'
+    const RUNPOD_ENDPOINT_ID = process.env.RUNPOD_ENDPOINT_ID || '4cx6jtjdx6hdhr'
+    const VITE_API_BASE_URL = process.env.VITE_API_BASE_URL || 'https://api.runpod.ai/v2'
+    const RUNPOD_ENDPOINT = `${VITE_API_BASE_URL}/${RUNPOD_ENDPOINT_ID}/runsync`
     
     // 如果没有配置API Key，直接使用模拟模式
     if (!RUNPOD_API_KEY) {
@@ -178,18 +180,26 @@ export default function ChatPage() {
     }
     
     try {
-      console.log('Sending request to RunPod API:', {
-        url: RUNPOD_ENDPOINT,
-        model: selectedModel.id
+      console.log('RunPod API Configuration:', {
+        endpoint: RUNPOD_ENDPOINT,
+        hasApiKey: !!RUNPOD_API_KEY,
+        selectedModel: selectedModel,
+        endpointId: RUNPOD_ENDPOINT_ID
       })
 
-      // 根据模型ID设置正确的模型路径
+      // 根据模型ID设置正确的模型路径 - 确保只使用指定的模型
       const model_paths = {
         "L3.2-8X3B": "/runpod-volume/text_models/L3.2-8X3B.gguf",
         "L3.2-8X4B": "/runpod-volume/text_models/L3.2-8X4B.gguf"
       }
       
-      const model_path = model_paths[selectedModel.id as keyof typeof model_paths] || model_paths["L3.2-8X3B"]
+      const model_path = model_paths[selectedModel.id as keyof typeof model_paths]
+      
+      if (!model_path) {
+        console.error(`Unsupported model: ${selectedModel.id}. Only L3.2-8X3B and L3.2-8X4B are supported.`)
+        setIsLoading(false)
+        return
+      }
 
       // 构建适合Llama模型的提示词
       const llama_prompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful, harmless, and honest assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${userInput}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`
@@ -197,24 +207,33 @@ export default function ChatPage() {
       // 首先尝试RunPod API调用（如果有API Key）
       if (RUNPOD_API_KEY) {
         try {
+          const requestPayload = {
+            input: {
+              model_path: model_path,
+              prompt: llama_prompt,
+              max_tokens: 150,
+              temperature: 0.7,
+              top_p: 0.9,
+              repeat_penalty: 1.05,
+              stop: ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>"],
+              stream: false
+            }
+          }
+          
+          console.log('Sending RunPod request:', {
+            endpoint: RUNPOD_ENDPOINT,
+            modelPath: model_path,
+            selectedModelId: selectedModel.id,
+            payload: requestPayload
+          })
+          
           const response = await fetch(RUNPOD_ENDPOINT, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${RUNPOD_API_KEY}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              input: {
-                model_path: model_path,
-                prompt: llama_prompt,
-                max_tokens: 150,
-                temperature: 0.7,
-                top_p: 0.9,
-                repeat_penalty: 1.05,
-                stop: ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>"],
-                stream: false
-              }
-            })
+            body: JSON.stringify(requestPayload)
           })
 
           console.log('RunPod response status:', response.status)
