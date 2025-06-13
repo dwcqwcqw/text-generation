@@ -1,173 +1,211 @@
+#!/usr/bin/env python3
+"""
+RunPod Handler for Llama GGUF Models
+修复 "No module named runpod.serverless.start" 问题
+支持 L3.2-8X3B 和 L3.2-8X4B 模型
+"""
+
 import runpod
 import json
 import logging
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch
+import os
+from llama_cpp import Llama
 
-# 配置日志
+# 设置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 全局变量存储模型
-model = None
-tokenizer = None
-current_model = None
+loaded_models = {}
+current_model_path = None
 
-def initialize_model(model_name="microsoft/DialoGPT-medium"):
-    """初始化模型"""
-    global model, tokenizer, current_model
+def load_model(model_path: str):
+    """加载Llama模型"""
+    global loaded_models, current_model_path
     
     try:
-        logger.info(f"Initializing model: {model_name}")
+        logger.info(f"尝试加载模型: {model_path}")
         
-        # 如果已经加载了相同模型，直接返回
-        if current_model == model_name and model is not None:
-            logger.info("Model already loaded")
-            return True
+        # 检查文件是否存在
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"模型文件不存在: {model_path}")
         
-        # 加载tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name, 
-            padding_side='left',
-            trust_remote_code=True
-        )
+        # 检查文件大小
+        file_size = os.path.getsize(model_path) / (1024**3)  # GB
+        logger.info(f"模型文件大小: {file_size:.2f} GB")
+        
+        # 如果模型已加载，直接返回
+        if model_path in loaded_models:
+            logger.info("模型已在缓存中，直接使用")
+            current_model_path = model_path
+            return loaded_models[model_path]
         
         # 加载模型
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None,
-            trust_remote_code=True
+        logger.info("开始加载模型...")
+        model = Llama(
+            model_path=model_path,
+            n_ctx=2048,  # 上下文长度
+            n_batch=512,  # 批处理大小
+            n_gpu_layers=-1,  # 使用GPU加速（如果可用）
+            verbose=False
         )
         
-        # 设置pad_token
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-            tokenizer.pad_token_id = tokenizer.eos_token_id
+        # 缓存模型
+        loaded_models[model_path] = model
+        current_model_path = model_path
         
-        current_model = model_name
-        logger.info("Model initialized successfully")
-        return True
+        logger.info("模型加载成功")
+        return model
         
     except Exception as e:
-        logger.error(f"Error initializing model {model_name}: {str(e)}")
-        # 回退到更简单的模型
-        if model_name != "gpt2":
-            logger.info("Falling back to GPT-2")
-            return initialize_model("gpt2")
-        return False
+        logger.error(f"加载模型失败: {e}")
+        raise e
 
-def generate_response(prompt, max_length=100, temperature=0.7):
-    """生成响应"""
-    global model, tokenizer
-    
+def generate_text(model, prompt: str, max_tokens: int = 150, temperature: float = 0.7, 
+                 top_p: float = 0.9, repeat_penalty: float = 1.05, stop_tokens: list = None):
+    """生成文本"""
     try:
-        if model is None or tokenizer is None:
-            if not initialize_model():
-                return "Error: Model initialization failed"
+        logger.info(f"生成文本 - prompt长度: {len(prompt)}, max_tokens: {max_tokens}")
         
-        # 编码输入
-        inputs = tokenizer.encode(prompt, return_tensors="pt")
+        # 默认停止词
+        if stop_tokens is None:
+            stop_tokens = ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>"]
         
-        # 设置注意力掩码
-        attention_mask = torch.ones(inputs.shape, dtype=torch.long)
+        # 生成文本
+        output = model(
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            repeat_penalty=repeat_penalty,
+            stop=stop_tokens,
+            echo=False  # 不回显输入
+        )
         
-        # 生成响应
-        with torch.no_grad():
-            outputs = model.generate(
-                inputs,
-                attention_mask=attention_mask,
-                max_length=min(max_length, inputs.shape[1] + 50),
-                temperature=temperature,
-                do_sample=True,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-                no_repeat_ngram_size=2
-            )
+        generated_text = output['choices'][0]['text']
+        logger.info(f"生成完成 - 输出长度: {len(generated_text)}")
         
-        # 解码响应
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # 移除原始提示，只返回生成的部分
-        if response.startswith(prompt):
-            response = response[len(prompt):].strip()
-        
-        return response if response else "I understand. Please tell me more."
+        return generated_text.strip()
         
     except Exception as e:
-        logger.error(f"Error generating response: {str(e)}")
-        return f"Sorry, I encountered an error: {str(e)}"
+        logger.error(f"生成文本失败: {e}")
+        raise e
 
 def handler(event):
     """RunPod处理函数"""
     try:
-        logger.info(f"Received event: {event}")
+        logger.info(f"收到请求: {json.dumps(event, indent=2)}")
         
         # 解析输入
         input_data = event.get("input", {})
         
         # 获取参数
         prompt = input_data.get("prompt", "")
-        model_name = input_data.get("model", "microsoft/DialoGPT-medium")
-        max_length = input_data.get("max_length", 100)
+        model_path = input_data.get("model_path", "/runpod-volume/text_models/L3.2-8X3B.gguf")
+        max_tokens = input_data.get("max_tokens", 150)
         temperature = input_data.get("temperature", 0.7)
+        top_p = input_data.get("top_p", 0.9)
+        repeat_penalty = input_data.get("repeat_penalty", 1.05)
+        stop_tokens = input_data.get("stop", ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>"])
+        stream = input_data.get("stream", False)
         
         # 验证输入
         if not prompt:
             return {
-                "error": "No prompt provided",
-                "status": "error"
+                "error": "未提供prompt",
+                "status": "FAILED"
             }
         
-        # 如果需要切换模型
-        global current_model
-        if model_name != current_model:
-            if not initialize_model(model_name):
-                # 如果指定模型失败，使用默认模型
-                model_name = "microsoft/DialoGPT-medium"
-                if not initialize_model(model_name):
-                    return {
-                        "error": "Failed to initialize any model",
-                        "status": "error"
-                    }
-        
-        # 生成响应
-        response = generate_response(prompt, max_length, temperature)
-        
-        return {
-            "output": response,
-            "model_used": current_model,
-            "status": "success",
-            "metadata": {
-                "prompt_length": len(prompt),
-                "response_length": len(response),
-                "temperature": temperature,
-                "max_length": max_length
-            }
+        # 验证模型路径
+        allowed_models = {
+            "/runpod-volume/text_models/L3.2-8X3B.gguf": "Llama-3.2-8X3B (18.4B)",
+            "/runpod-volume/text_models/L3.2-8X4B.gguf": "Llama-3.2-8X4B (21B)"
         }
+        
+        if model_path not in allowed_models:
+            return {
+                "error": f"不支持的模型路径: {model_path}。支持的模型: {list(allowed_models.keys())}",
+                "status": "FAILED"
+            }
+        
+        # 加载模型
+        try:
+            model = load_model(model_path)
+        except FileNotFoundError as e:
+            return {
+                "error": str(e),
+                "status": "FAILED",
+                "suggestion": "请检查模型文件是否存在于指定路径"
+            }
+        except Exception as e:
+            return {
+                "error": f"模型加载失败: {str(e)}",
+                "status": "FAILED",
+                "suggestion": "请检查模型文件格式和系统内存"
+            }
+        
+        # 生成文本
+        try:
+            generated_text = generate_text(
+                model=model,
+                prompt=prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                repeat_penalty=repeat_penalty,
+                stop_tokens=stop_tokens
+            )
+            
+            return {
+                "text": generated_text,
+                "status": "COMPLETED",
+                "model_used": model_path,
+                "model_name": allowed_models[model_path],
+                "metadata": {
+                    "prompt_length": len(prompt),
+                    "response_length": len(generated_text),
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "repeat_penalty": repeat_penalty
+                }
+            }
+            
+        except Exception as e:
+            return {
+                "error": f"文本生成失败: {str(e)}",
+                "status": "FAILED",
+                "suggestion": "请检查输入参数和模型状态"
+            }
         
     except Exception as e:
-        logger.error(f"Handler error: {str(e)}")
+        logger.error(f"Handler错误: {str(e)}")
         return {
-            "error": str(e),
-            "status": "error"
+            "error": f"处理请求时出错: {str(e)}",
+            "status": "FAILED"
         }
 
-# 初始化模型（可选）
-if __name__ == "__main__":
-    # 预加载模型
-    initialize_model()
+def test_handler():
+    """测试handler函数"""
+    logger.info("开始测试handler...")
     
-    # 测试
     test_event = {
         "input": {
-            "prompt": "Hello, how are you?",
-            "model": "microsoft/DialoGPT-medium"
+            "prompt": "Hello, how are you today?",
+            "model_path": "/runpod-volume/text_models/L3.2-8X3B.gguf",
+            "max_tokens": 50,
+            "temperature": 0.7
         }
     }
     
     result = handler(test_event)
-    print(json.dumps(result, indent=2))
+    print("测试结果:")
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
-# 启动RunPod服务
-runpod.serverless.start({"handler": handler}) 
+if __name__ == "__main__":
+    # 测试模式
+    test_handler()
+else:
+    # 启动RunPod serverless
+    logger.info("🚀 启动RunPod serverless handler...")
+    runpod.serverless.start({"handler": handler}) 
