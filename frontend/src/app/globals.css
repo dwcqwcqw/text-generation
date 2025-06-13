@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 * {
   box-sizing: border-box;
@@ -16,11 +16,13 @@ body {
   overflow-x: hidden;
   font-family: 'Inter', sans-serif;
   height: 100%;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
 
 body {
-  background: #f9fafb;
+  background: #ffffff;
   color: #111827;
+  line-height: 1.6;
 }
 
 a {
@@ -40,7 +42,7 @@ a {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -52,9 +54,18 @@ a {
   background: #9ca3af;
 }
 
+/* Dark sidebar scrollbar */
+.bg-gray-900 ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+.bg-gray-900 ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
 /* Message animations */
 .message-bubble {
-  animation: slideInUp 0.4s ease-out;
+  animation: slideInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes slideInUp {
@@ -70,15 +81,32 @@ a {
 
 /* Smooth transitions */
 .transition-all {
-  transition: all 0.2s ease-in-out;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced button styles */
+.btn-primary {
+  @apply bg-gray-900 text-white hover:bg-gray-800 transition-all duration-200 shadow-sm hover:shadow-md;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all duration-200;
+}
+
+/* Input focus effects */
+.input-focus {
+  @apply focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all duration-200;
 }
 
 /* Loading animation */
 @keyframes bounce {
   0%, 80%, 100% {
-    transform: scale(0);
-  } 40% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  } 
+  40% {
     transform: scale(1);
+    opacity: 1;
   }
 }
 
@@ -86,44 +114,50 @@ a {
   animation: bounce 1.4s infinite ease-in-out both;
 }
 
-/* Input focus effects */
-.input-focus {
-  @apply focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200;
-}
-
-/* Button hover effects */
-.btn-primary {
-  @apply bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200;
-}
-
-.btn-secondary {
-  @apply bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors duration-200;
-}
-
 /* Chat session hover effects */
+.chat-session {
+  @apply transition-all duration-200 ease-in-out;
+}
+
 .chat-session:hover {
-  @apply bg-gray-50 transform scale-[1.02] transition-all duration-200;
+  @apply transform scale-[1.02];
 }
 
 .chat-session.active {
-  @apply bg-blue-50 border-blue-200 shadow-sm;
+  @apply shadow-sm;
 }
 
 /* Prose customization for markdown */
 .prose {
-  @apply text-gray-700;
+  @apply text-gray-700 leading-relaxed;
 }
 
 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
-  @apply text-gray-900;
+  @apply text-gray-900 font-semibold;
+}
+
+.prose p {
+  @apply mb-4;
 }
 
 .prose code {
-  @apply bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-sm;
+  @apply bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm font-mono;
 }
 
 .prose pre {
-  @apply bg-gray-50 border border-gray-200 rounded-lg;
+  @apply bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto;
+}
+
+.prose pre code {
+  @apply bg-transparent p-0;
+}
+
+.prose ul, .prose ol {
+  @apply mb-4;
+}
+
+.prose li {
+  @apply mb-1;
 }
 
 /* Dropdown animations */
@@ -135,7 +169,7 @@ a {
 .dropdown-enter-active {
   opacity: 1;
   transform: translateY(0) scale(1);
-  transition: all 200ms ease-out;
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dropdown-exit {
@@ -146,7 +180,56 @@ a {
 .dropdown-exit-active {
   opacity: 0;
   transform: translateY(-10px) scale(0.95);
-  transition: all 150ms ease-in;
+  transition: all 150ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* Enhanced focus states */
+button:focus-visible {
+  @apply outline-none ring-2 ring-offset-2 ring-gray-900;
+}
+
+input:focus,
+textarea:focus {
+  @apply outline-none;
+}
+
+/* Subtle glow effects */
+.glow-on-hover {
+  @apply transition-all duration-300;
+}
+
+.glow-on-hover:hover {
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Text selection */
+::selection {
+  background: #1f2937;
+  color: white;
+}
+
+/* Improved typography */
+h1, h2, h3, h4, h5, h6 {
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  letter-spacing: -0.025em;
+}
+
+/* Better spacing for chat messages */
+.message-spacing {
+  @apply space-y-6;
+}
+
+/* Responsive design helpers */
+@media (max-width: 768px) {
+  .w-72 {
+    @apply w-64;
+  }
+}
+
+@media (max-width: 640px) {
+  .w-72 {
+    @apply w-full;
+  }
 }
 
 /* Chat specific styles */

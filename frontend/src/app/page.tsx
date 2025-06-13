@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Send, Bot, User, Settings, RotateCcw, Search, Plus, ChevronDown, MessageSquare, RefreshCw } from 'lucide-react'
+import { Send, Bot, User, Search, Plus, ChevronDown, MessageSquare, RefreshCw, Settings } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
 interface Message {
@@ -234,27 +234,27 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-screen flex bg-gray-50">
-      {/* Left Sidebar */}
-      <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-bold text-gray-900">CHAT A.I+</h1>
-          </div>
-          
-          {/* New Chat Button */}
+    <div className="h-screen flex bg-white">
+      {/* 左侧边栏 */}
+      <div className="w-72 bg-gray-900 text-white flex flex-col">
+        {/* 顶部标题 */}
+        <div className="p-6 border-b border-gray-700">
+          <h1 className="text-2xl font-bold">CHAT A.I+</h1>
+        </div>
+        
+        {/* New Chat 按钮 */}
+        <div className="p-4">
           <button
             onClick={createNewChat}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-3 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors font-medium"
           >
             <Plus size={18} />
             New chat
           </button>
         </div>
 
-        {/* Search */}
-        <div className="p-4 border-b border-gray-200">
+        {/* 搜索框 */}
+        <div className="px-4 pb-4">
           <div className="relative">
             <Search size={18} className="absolute left-3 top-3 text-gray-400" />
             <input
@@ -262,62 +262,62 @@ export default function ChatPage() {
               placeholder="Search conversations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-800 text-white placeholder-gray-400 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
         </div>
 
-        {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-4">
-            <h3 className="text-sm font-medium text-gray-600 mb-3">Your conversations</h3>
-            <div className="space-y-2">
-              {filteredSessions.map((session) => (
-                <button
-                  key={session.id}
-                  onClick={() => selectSession(session)}
-                  className={`w-full text-left p-3 rounded-lg transition-colors ${
-                    currentSession?.id === session.id
-                      ? 'bg-blue-50 border border-blue-200'
-                      : 'hover:bg-gray-50 border border-transparent'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <MessageSquare size={16} className="text-gray-400 mt-1 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {session.title}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {session.lastMessage.toLocaleDateString()}
-                      </p>
-                    </div>
+        {/* 对话列表 */}
+        <div className="flex-1 overflow-y-auto px-4">
+          <h3 className="text-sm font-medium text-gray-300 mb-3">Your conversations</h3>
+          <div className="space-y-2">
+            {filteredSessions.map((session) => (
+              <button
+                key={session.id}
+                onClick={() => selectSession(session)}
+                className={`w-full text-left p-3 rounded-lg transition-all duration-200 ${
+                  currentSession?.id === session.id
+                    ? 'bg-gray-700 border border-gray-600'
+                    : 'hover:bg-gray-800 border border-transparent'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <MessageSquare size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">
+                      {session.title}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {session.lastMessage.toLocaleDateString()}
+                    </p>
                   </div>
-                </button>
-              ))}
-            </div>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Model Selector */}
-        <div className="p-4 border-t border-gray-200">
+        {/* 底部模型选择器 */}
+        <div className="p-4 border-t border-gray-700">
           <div className="relative">
             <button
               onClick={() => setShowModelDropdown(!showModelDropdown)}
-              className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-between p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors border border-gray-600"
             >
               <div className="flex items-center gap-3">
-                <Bot size={18} className="text-gray-600" />
+                <div className="w-8 h-8 bg-gray-600 rounded-lg flex items-center justify-center">
+                  <Bot size={18} className="text-white" />
+                </div>
                 <div className="text-left">
-                  <p className="text-sm font-medium text-gray-900">{selectedModel.name}</p>
-                  <p className="text-xs text-gray-500">{selectedModel.parameters}</p>
+                  <p className="text-sm font-medium text-white">{selectedModel.name}</p>
+                  <p className="text-xs text-gray-400">{selectedModel.parameters}</p>
                 </div>
               </div>
               <ChevronDown size={18} className="text-gray-400" />
             </button>
             
             {showModelDropdown && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20">
                 {models.map((model) => (
                   <button
                     key={model.id}
@@ -325,10 +325,10 @@ export default function ChatPage() {
                       setSelectedModel(model)
                       setShowModelDropdown(false)
                     }}
-                    className="w-full text-left p-3 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg"
+                    className="w-full text-left p-4 hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg transition-colors"
                   >
-                    <p className="text-sm font-medium text-gray-900">{model.name}</p>
-                    <p className="text-xs text-gray-500">{model.description}</p>
+                    <p className="text-sm font-medium text-white">{model.name}</p>
+                    <p className="text-xs text-gray-400">{model.description}</p>
                   </button>
                 ))}
               </div>
@@ -337,11 +337,11 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Chat Header */}
-        {currentSession && (
-          <div className="p-4 border-b border-gray-200 bg-white">
+      {/* 主聊天区域 */}
+      <div className="flex-1 flex flex-col bg-white">
+        {/* 聊天头部 */}
+        {currentSession && currentSession.messages.length > 0 && (
+          <div className="px-6 py-4 border-b border-gray-200 bg-white">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">
                 {currentSession.title}
@@ -350,7 +350,7 @@ export default function ChatPage() {
                 <button
                   onClick={regenerateLastMessage}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
                 >
                   <RefreshCw size={16} />
                   Regenerate
@@ -360,44 +360,46 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* 消息区域 */}
+        <div className="flex-1 overflow-y-auto">
           {!currentSession || currentSession.messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center text-gray-500 max-w-md">
-                <Bot size={64} className="mx-auto mb-6 text-gray-300" />
-                <h2 className="text-2xl font-semibold mb-4 text-gray-700">
+            <div className="h-full flex items-center justify-center bg-gray-50">
+              <div className="text-center max-w-md mx-auto px-6">
+                <div className="w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <Bot size={32} className="text-white" />
+                </div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-4">
                   What's in your mind?
                 </h2>
-                <p className="text-gray-500 mb-6">
+                <p className="text-gray-600 mb-8 text-lg">
                   Start a conversation with our AI assistant. Ask questions, get help, or just chat!
                 </p>
-                <div className="text-sm text-gray-400">
+                <div className="text-sm text-gray-500 bg-white p-4 rounded-lg border border-gray-200">
                   <p><strong>Model:</strong> {selectedModel.name}</p>
                   <p>{selectedModel.description}</p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="space-y-6 max-w-4xl mx-auto">
+            <div className="p-6 space-y-8 max-w-4xl mx-auto w-full">
               {currentSession.messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`flex gap-4 ${
+                  className={`flex gap-4 message-bubble ${
                     message.role === 'user' ? 'justify-end' : 'justify-start'
                   }`}
                 >
                   {message.role === 'assistant' && (
-                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0">
                       <Bot size={20} className="text-white" />
                     </div>
                   )}
                   
                   <div
-                    className={`max-w-3xl p-4 rounded-2xl ${
+                    className={`max-w-2xl p-4 rounded-2xl ${
                       message.role === 'user'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white border border-gray-200 shadow-sm'
+                        ? 'bg-gray-900 text-white'
+                        : 'bg-gray-100 text-gray-900'
                     }`}
                   >
                     {message.role === 'user' ? (
@@ -409,7 +411,7 @@ export default function ChatPage() {
                     )}
                     
                     <div className={`text-xs mt-3 ${
-                      message.role === 'user' ? 'text-blue-100' : 'text-gray-400'
+                      message.role === 'user' ? 'text-gray-300' : 'text-gray-500'
                     }`}>
                       {message.timestamp.toLocaleTimeString()}
                       {message.model && (
@@ -419,7 +421,7 @@ export default function ChatPage() {
                   </div>
 
                   {message.role === 'user' && (
-                    <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                       <User size={20} className="text-white" />
                     </div>
                   )}
@@ -428,10 +430,10 @@ export default function ChatPage() {
               
               {isLoading && (
                 <div className="flex gap-4">
-                  <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0">
                     <Bot size={20} className="text-white" />
                   </div>
-                  <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                  <div className="bg-gray-100 rounded-2xl p-4">
                     <div className="flex space-x-2">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -446,28 +448,26 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Input Area */}
+        {/* 输入区域 */}
         <div className="p-6 bg-white border-t border-gray-200">
           <div className="max-w-4xl mx-auto">
-            <div className="flex gap-4 items-end">
-              <div className="flex-1 relative">
-                <textarea
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="What's in your mind?"
-                  className="w-full p-4 pr-12 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
-                  rows={1}
-                  style={{ minHeight: '56px', maxHeight: '160px' }}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!inputValue.trim() || isLoading}
-                  className="absolute right-3 bottom-3 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Send size={18} />
-                </button>
-              </div>
+            <div className="relative">
+              <textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="What's in your mind?"
+                className="w-full p-4 pr-14 border-2 border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-gray-900 placeholder-gray-500"
+                rows={1}
+                style={{ minHeight: '56px', maxHeight: '160px' }}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || isLoading}
+                className="absolute right-2 bottom-2 p-3 bg-gray-900 text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Send size={18} />
+              </button>
             </div>
             
             <div className="mt-3 text-xs text-gray-500 text-center">
