@@ -1,10 +1,13 @@
-runpod==1.5.1
-# 使用正确的依赖格式，避免版本冲突
-transformers==4.35.2
-torch==2.0.1
-numpy==1.24.3
-fastapi==0.103.2
-uvicorn==0.23.2
-pydantic==2.4.2
-python-multipart==0.0.6
-requests==2.31.0 
+# RunPod Requirements - 修复模块缺失问题
+runpod>=1.6.0
+llama-cpp-python>=0.2.11
+numpy>=1.24.3
+torch>=2.0.1
+requests>=2.31.0
+pydantic>=2.4.2
+python-multipart>=0.0.6
+
+# 可选依赖 (如果需要HuggingFace支持)
+# transformers>=4.35.2
+# fastapi>=0.103.2
+# uvicorn>=0.23.2 

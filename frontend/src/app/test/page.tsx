@@ -137,6 +137,49 @@ export default function TestPage() {
     setLoading(false)
   }
 
+  const testRunPodHealth = async () => {
+    setLoading(true)
+    setTestResult('Checking RunPod health...')
+
+    try {
+      // Test health endpoint
+      const healthEndpoint = `https://api.runpod.ai/v2/${endpointId}/health`
+      console.log('Checking endpoint health:', healthEndpoint)
+
+      const healthResponse = await fetch(healthEndpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        }
+      })
+
+      console.log('Health Response:', healthResponse.status)
+      const healthText = await healthResponse.text()
+      console.log('Health Response Text:', healthText)
+
+      let healthData
+      try {
+        healthData = JSON.parse(healthText)
+      } catch (e) {
+        setTestResult(`❌ Health Check - Invalid JSON:\n${healthText}`)
+        setLoading(false)
+        return
+      }
+
+      if (healthResponse.ok) {
+        setTestResult(`✅ RunPod Endpoint Health:\n${JSON.stringify(healthData, null, 2)}`)
+      } else {
+        setTestResult(`❌ Health Check Failed (${healthResponse.status}):\n${JSON.stringify(healthData, null, 2)}`)
+      }
+
+    } catch (error) {
+      console.error('Health Check Error:', error)
+      setTestResult(`❌ Health Check Network Error:\n${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    setLoading(false)
+  }
+
   const testEnvironmentVariables = () => {
     const envInfo = {
       'NEXT_PUBLIC_RUNPOD_API_KEY': process.env.NEXT_PUBLIC_RUNPOD_API_KEY || 'NOT SET',
@@ -233,13 +276,21 @@ export default function TestPage() {
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">测试按钮</h2>
           
-                     <div className="space-x-4 space-y-2 flex flex-wrap">
+                     <div className="grid grid-cols-2 gap-4">
              <button
                onClick={testRunPodStatus}
                disabled={loading}
                className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
              >
                {loading ? '检查中...' : '检查 RunPod 状态'}
+             </button>
+             
+             <button
+               onClick={testRunPodHealth}
+               disabled={loading}
+               className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               {loading ? '检查中...' : '检查 RunPod 健康'}
              </button>
              
              <button
@@ -270,12 +321,84 @@ export default function TestPage() {
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-6">
           <h3 className="text-lg font-medium text-yellow-800 mb-2">使用说明</h3>
           <ul className="text-sm text-yellow-700 space-y-1">
-            <li>• 首先点击"检查环境变量"看看环境变量是否正确读取</li>
-            <li>• 然后点击"测试 RunPod API"直接测试API连接</li>
-            <li>• 可以修改API Key、Endpoint和提示词进行测试</li>
+            <li>• 首先输入API Key: <code>rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb</code></li>
+            <li>• 点击"保存"将API Key保存到本地</li>
+            <li>• 按顺序测试：状态 → 健康 → API调用</li>
             <li>• 查看浏览器开发者工具的Console获取更多调试信息</li>
           </ul>
         </div>
+
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-6">
+          <h3 className="text-lg font-medium text-red-800 mb-2">🚨 常见错误诊断</h3>
+          <div className="text-sm text-red-700 space-y-2">
+            <div>
+              <strong>Worker exited with exit code 1:</strong>
+              <ul className="ml-4 mt-1 space-y-1">
+                <li>• 模型文件路径不正确或文件不存在</li>
+                <li>• 模型文件损坏或格式不支持</li>
+                <li>• RunPod worker内存不足</li>
+                <li>• Python环境或依赖包问题</li>
+              </ul>
+            </div>
+            <div>
+              <strong>401 Unauthorized:</strong>
+              <ul className="ml-4 mt-1 space-y-1">
+                <li>• API Key错误或过期</li>
+                <li>• Endpoint ID不正确</li>
+              </ul>
+            </div>
+            <div>
+              <strong>500 Internal Server Error:</strong>
+              <ul className="ml-4 mt-1 space-y-1">
+                <li>• RunPod服务器内部错误</li>
+                <li>• 模型加载失败</li>
+                <li>• 请求参数格式错误</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+           <h3 className="text-lg font-medium text-blue-800 mb-2">🔧 解决方案建议</h3>
+           <div className="text-sm text-blue-700 space-y-2">
+             <div>
+               <strong>⚠️ 当前问题：Worker超时 (exit code 1)</strong>
+               <p className="ml-4 text-red-600">Workers启动正常但处理请求时超时，通常是模型加载问题</p>
+             </div>
+             <div>
+               <strong>1. 检查RunPod日志:</strong>
+               <p className="ml-4">登录RunPod控制台 → 选择你的Endpoint → 查看实时日志</p>
+             </div>
+             <div>
+               <strong>2. 验证模型文件:</strong>
+               <p className="ml-4">确认 <code>L3.2-8X3B.gguf</code> 和 <code>L3.2-8X4B.gguf</code> 存在于 <code>/runpod-volume/text_models/</code></p>
+             </div>
+             <div>
+               <strong>3. 检查内存配置:</strong>
+               <p className="ml-4">18B/21B参数的模型需要大量内存，确保RunPod分配了足够的GPU内存</p>
+             </div>
+             <div>
+               <strong>4. 临时解决方案:</strong>
+               <p className="ml-4">考虑使用更小的模型或增加超时时间</p>
+             </div>
+             <div>
+               <strong>5. 重新部署:</strong>
+               <p className="ml-4">在RunPod控制台重新部署endpoint，确保所有依赖正确安装</p>
+             </div>
+           </div>
+         </div>
+
+         <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-6">
+           <h3 className="text-lg font-medium text-green-800 mb-2">📝 下一步行动</h3>
+           <ol className="text-sm text-green-700 space-y-1 list-decimal list-inside">
+             <li>访问 <a href="https://runpod.io" target="_blank" className="underline">RunPod控制台</a></li>
+             <li>找到Endpoint ID: <code>4cx6jtjdx6hdhr</code></li>
+             <li>点击"View Logs"查看实时日志</li>
+             <li>寻找错误信息，特别是模型加载相关的错误</li>
+             <li>如果看到"模型文件未找到"，需要重新上传模型</li>
+             <li>如果看到"内存不足"，需要升级到更大的GPU</li>
+           </ol>
+         </div>
       </div>
     </div>
   )

@@ -1,39 +1,34 @@
-FROM nvidia/cuda:12.1-devel-ubuntu22.04
+# RunPod Serverless Dockerfile
+# 修复 "No module named runpod.serverless.start" 问题
 
-# 设置环境变量
-ENV PYTHON_VERSION=3.11
-ENV DEBIAN_FRONTEND=noninteractive
-
-# 安装系统依赖
-RUN apt-get update && apt-get install -y \
-    python${PYTHON_VERSION} \
-    python${PYTHON_VERSION}-dev \
-    python3-pip \
-    git \
-    curl \
-    cmake \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# 设置Python别名
-RUN ln -s /usr/bin/python${PYTHON_VERSION} /usr/bin/python
+FROM runpod/pytorch:2.0.1-py3.10-cuda11.8.0-devel-ubuntu22.04
 
 # 设置工作目录
-WORKDIR /app
+WORKDIR /workspace
 
-# 复制依赖文件
+# 更新系统包
+RUN apt-get update && apt-get install -y \
+    git \
+    wget \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 升级pip
+RUN pip install --upgrade pip
+
+# 安装最新版本的runpod (修复模块缺失问题)
+RUN pip uninstall runpod -y || true
+RUN pip install runpod>=1.6.0
+
+# 验证runpod安装
+RUN python -c "import runpod; from runpod.serverless import start; print('RunPod安装成功')"
+
+# 安装其他依赖
 COPY requirements.txt .
-
-# 安装Python依赖，确保CUDA支持
-ENV CMAKE_ARGS="-DLLAMA_CUBLAS=on"
-ENV FORCE_CMAKE=1
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
 # 复制应用代码
-COPY handler.py .
+COPY . .
 
-# 创建模型目录
-RUN mkdir -p /runpod-volume/text_models
-
-# 设置启动命令
+# 设置入口点
 CMD ["python", "handler.py"] 
