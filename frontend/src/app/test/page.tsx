@@ -175,7 +175,7 @@ export default function TestPage() {
                    value={apiKey}
                    onChange={(e) => setApiKey(e.target.value)}
                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                   placeholder="rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb"
+                   placeholder="请输入RunPod API Key (rpa_...)"
                  />
                  <button
                    onClick={saveApiKey}
@@ -184,9 +184,9 @@ export default function TestPage() {
                    保存
                  </button>
                </div>
-               <p className="text-xs text-gray-500 mt-1">
-                 API Key将保存在浏览器本地存储中，请输入: rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb
-               </p>
+                               <p className="text-xs text-gray-500 mt-1">
+                  API Key将保存在浏览器本地存储中。格式: rpa_开头的长字符串
+                </p>
              </div>
             
                          <div>
