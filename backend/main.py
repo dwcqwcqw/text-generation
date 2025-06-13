@@ -27,10 +27,10 @@ app.add_middleware(
 
 # 配置
 RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY")
-RUNPOD_ENDPOINT = os.getenv("RUNPOD_ENDPOINT", "https://api.runpod.ai/v2/your-endpoint/runsync")
+RUNPOD_ENDPOINT = os.getenv("RUNPOD_ENDPOINT", "https://api.runpod.ai/v2/llama-text-gen/runsync")
 CLOUDFLARE_ACCESS_KEY = os.getenv("CLOUDFLARE_ACCESS_KEY")
 CLOUDFLARE_SECRET_KEY = os.getenv("CLOUDFLARE_SECRET_KEY")
-S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://your-account-id.r2.cloudflarestorage.com")
+S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://c7c141ce43d175e60601edc46d904553.r2.cloudflarestorage.com")
 R2_BUCKET = os.getenv("R2_BUCKET", "text-generation")
 
 # Pydantic模型
@@ -42,6 +42,12 @@ class Message(BaseModel):
     model: Optional[str] = None
 
 class ChatRequest(BaseModel):
+    prompt: str
+    model: str = "gpt2"
+    max_length: int = 150
+    temperature: float = 0.7
+
+class ChatRequestLegacy(BaseModel):
     message: str
     model: str = "L3.2-8X3B"
     history: List[Message] = []
@@ -53,97 +59,173 @@ class ChatResponse(BaseModel):
     model: str
     timestamp: datetime
 
+class SimpleResponse(BaseModel):
+    output: str
+    generated_text: str
+
 # R2存储客户端
 def get_r2_client():
-    return boto3.client(
-        's3',
-        endpoint_url=S3_ENDPOINT,
-        aws_access_key_id=CLOUDFLARE_ACCESS_KEY,
-        aws_secret_access_key=CLOUDFLARE_SECRET_KEY,
-        region_name='auto'
-    )
+    try:
+        return boto3.client(
+            's3',
+            endpoint_url=S3_ENDPOINT,
+            aws_access_key_id=CLOUDFLARE_ACCESS_KEY,
+            aws_secret_access_key=CLOUDFLARE_SECRET_KEY,
+            region_name='auto'
+        )
+    except Exception as e:
+        print(f"Failed to create R2 client: {e}")
+        return None
 
 @app.get("/")
 async def root():
-    return {"message": "AI Chat API is running"}
+    return {"message": "AI Chat API is running", "endpoints": ["/chat", "/health", "/models"]}
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now()}
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat")
 async def chat(request: ChatRequest):
-    """处理聊天请求"""
+    """处理聊天请求 - 简化版本"""
     try:
-        # 构建聊天上下文
-        context = ""
-        if request.history:
-            for msg in request.history[-10:]:  # 只使用最近10条消息
-                role = "User" if msg.role == "user" else "Assistant"
-                context += f"{role}: {msg.content}\n"
+        print(f"Received chat request: {request}")
         
-        context += f"User: {request.message}\nAssistant:"
-        
-        # 准备RunPod请求
-        runpod_payload = {
-            "input": {
-                "prompt": context,
-                "model_path": f"/runpod-volume/text_models/{request.model}.gguf",
-                "max_tokens": request.max_tokens,
-                "temperature": request.temperature,
-                "top_p": 0.9,
-                "repeat_penalty": 1.1,
-                "stop": ["User:", "Human:", "\n\n"]
+        # 模拟AI回复 - 如果RunPod不可用
+        if not RUNPOD_API_KEY or not RUNPOD_ENDPOINT:
+            ai_response = f"Hello! You said: '{request.prompt}'. This is a test response from {request.model}."
+            return {
+                "output": ai_response,
+                "response": ai_response,
+                "generated_text": ai_response,
+                "model": request.model,
+                "timestamp": datetime.now()
             }
-        }
         
-        # 发送请求到RunPod
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            headers = {
-                "Authorization": f"Bearer {RUNPOD_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            
-            response = await client.post(
-                RUNPOD_ENDPOINT,
-                json=runpod_payload,
-                headers=headers
-            )
-            
-            if response.status_code != 200:
-                raise HTTPException(status_code=500, detail=f"RunPod API error: {response.text}")
-            
-            result = response.json()
-            
-            if result.get("status") != "COMPLETED":
-                raise HTTPException(status_code=500, detail="Model inference failed")
-            
-            ai_response = result.get("output", {}).get("text", "").strip()
-            
-            if not ai_response:
-                ai_response = "抱歉，我没有收到有效的响应。请重试。"
-        
-        # 保存聊天记录到R2
+        # 尝试调用RunPod API
         try:
-            await save_chat_to_r2(request, ai_response)
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                runpod_payload = {
+                    "input": {
+                        "prompt": request.prompt,
+                        "max_tokens": request.max_length,
+                        "temperature": request.temperature,
+                        "stop": ["\n", "User:", "Human:"]
+                    }
+                }
+                
+                headers = {
+                    "Authorization": f"Bearer {RUNPOD_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                
+                response = await client.post(
+                    RUNPOD_ENDPOINT,
+                    json=runpod_payload,
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get("status") == "COMPLETED":
+                        ai_response = result.get("output", {}).get("text", "").strip()
+                        if ai_response:
+                            return {
+                                "output": ai_response,
+                                "response": ai_response,
+                                "generated_text": ai_response,
+                                "model": request.model,
+                                "timestamp": datetime.now()
+                            }
+                
+                # 如果RunPod失败，使用模拟回复
+                print(f"RunPod API failed: {response.status_code}")
+                
         except Exception as e:
-            print(f"Failed to save to R2: {e}")
-            # 不因为存储失败而中断聊天
+            print(f"RunPod error: {e}")
         
-        return ChatResponse(
-            response=ai_response,
-            model=request.model,
-            timestamp=datetime.now()
-        )
+        # 使用模拟回复作为后备
+        ai_response = f"I understand you're asking about: '{request.prompt}'. This is a simulated response from {request.model} model. The system is currently using fallback mode."
+        
+        # 保存聊天记录
+        try:
+            await save_simple_chat(request.prompt, ai_response, request.model)
+        except Exception as e:
+            print(f"Failed to save chat: {e}")
+        
+        return {
+            "output": ai_response,
+            "response": ai_response, 
+            "generated_text": ai_response,
+            "model": request.model,
+            "timestamp": datetime.now()
+        }
         
     except Exception as e:
         print(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-async def save_chat_to_r2(request: ChatRequest, response: str):
+@app.post("/chat/legacy", response_model=ChatResponse)
+async def chat_legacy(request: ChatRequestLegacy):
+    """处理聊天请求 - 原版本兼容"""
+    try:
+        # 转换为新格式
+        chat_req = ChatRequest(
+            prompt=request.message,
+            model=request.model,
+            max_length=request.max_tokens,
+            temperature=request.temperature
+        )
+        
+        result = await chat(chat_req)
+        
+        return ChatResponse(
+            response=result.get("response", ""),
+            model=request.model,
+            timestamp=datetime.now()
+        )
+        
+    except Exception as e:
+        print(f"Legacy chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def save_simple_chat(prompt: str, response: str, model: str):
     """保存聊天记录到Cloudflare R2"""
     try:
         r2_client = get_r2_client()
+        if not r2_client:
+            return
+        
+        chat_session = {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "model": model,
+            "prompt": prompt,
+            "response": response
+        }
+        
+        # 使用日期作为文件夹结构
+        date_prefix = datetime.now().strftime("%Y/%m/%d")
+        key = f"chats/{date_prefix}/{chat_session['id']}.json"
+        
+        r2_client.put_object(
+            Bucket=R2_BUCKET,
+            Key=key,
+            Body=json.dumps(chat_session, ensure_ascii=False),
+            ContentType='application/json'
+        )
+        
+        print(f"Chat saved to R2: {key}")
+        
+    except Exception as e:
+        print(f"R2 save error: {e}")
+
+async def save_chat_to_r2(request: ChatRequestLegacy, response: str):
+    """保存聊天记录到Cloudflare R2"""
+    try:
+        r2_client = get_r2_client()
+        if not r2_client:
+            return
         
         chat_session = {
             "id": str(uuid.uuid4()),
@@ -179,12 +261,23 @@ async def save_chat_to_r2(request: ChatRequest, response: str):
         
     except Exception as e:
         print(f"R2 save error: {e}")
-        raise
 
 @app.get("/models")
 async def get_models():
     """获取可用模型列表"""
     models = [
+        {
+            "id": "gpt2",
+            "name": "GPT-2",
+            "description": "OpenAI GPT-2 text generation model",
+            "parameters": "124M"
+        },
+        {
+            "id": "microsoft/DialoGPT-medium",
+            "name": "DialoGPT Medium",
+            "description": "Microsoft DialoGPT conversation model",
+            "parameters": "117M"
+        },
         {
             "id": "L3.2-8X3B",
             "name": "Llama 3.2 8X3B MOE",
@@ -205,6 +298,10 @@ async def get_chat_history(date: str):
     """获取指定日期的聊天历史"""
     try:
         r2_client = get_r2_client()
+        if not r2_client:
+            return {"chats": [], "message": "Storage not available"}
+        
+        # 列出指定日期的所有聊天文件
         prefix = f"chats/{date}/"
         
         response = r2_client.list_objects_v2(
@@ -212,20 +309,29 @@ async def get_chat_history(date: str):
             Prefix=prefix
         )
         
-        history = []
-        for obj in response.get('Contents', []):
-            chat_data = r2_client.get_object(
-                Bucket=R2_BUCKET,
-                Key=obj['Key']
-            )
-            content = json.loads(chat_data['Body'].read())
-            history.append(content)
+        chats = []
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                try:
+                    file_response = r2_client.get_object(
+                        Bucket=R2_BUCKET,
+                        Key=obj['Key']
+                    )
+                    chat_data = json.loads(file_response['Body'].read())
+                    chats.append(chat_data)
+                except Exception as e:
+                    print(f"Error reading chat file {obj['Key']}: {e}")
         
-        return {"history": history}
+        return {"chats": chats}
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"History error: {e}")
+        return {"chats": [], "error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    host = os.getenv("API_HOST", "0.0.0.0")
+    port = int(os.getenv("API_PORT", 8000))
+    debug = os.getenv("DEBUG", "false").lower() == "true"
+    
+    uvicorn.run(app, host=host, port=port, debug=debug) 

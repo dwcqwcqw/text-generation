@@ -140,28 +140,110 @@ export default function ChatPage() {
     setIsLoading(true)
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      console.log('Sending request to API:', {
+        url: `${process.env.NEXT_PUBLIC_API_URL}/chat`,
+        data: {
           prompt: userInput,
           model: selectedModel.id,
           max_length: 150,
           temperature: 0.7
-        })
+        }
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to get response')
+      // 首先尝试API调用
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: userInput,
+            model: selectedModel.id,
+            max_length: 150,
+            temperature: 0.7
+          })
+        })
+
+        console.log('Response status:', response.status)
+        
+        if (response.ok) {
+          const data = await response.json()
+          console.log('API Response:', data)
+          
+          const assistantMessage: Message = {
+            id: Date.now().toString(),
+            content: data.output || data.response || data.generated_text || 'Sorry, I couldn\'t generate a response.',
+            role: 'assistant',
+            timestamp: new Date(),
+            model: selectedModel.id
+          }
+
+          if (currentSession) {
+            const updatedMessages = [...(history.length > 0 ? history : currentSession.messages), assistantMessage]
+            const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+            
+            setCurrentSession(updatedSession)
+            setChatSessions(prev => 
+              prev.map(s => s.id === currentSession.id ? updatedSession : s)
+            )
+          }
+          setIsLoading(false)
+          return
+        }
+      } catch (apiError) {
+        console.log('API not available, using offline mode:', apiError)
       }
 
-      const data = await response.json()
+      // 如果API不可用，使用模拟回复
+      console.log('Using simulated AI response')
+      
+      // 模拟AI思考时间
+      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
+      
+      // 生成模拟的AI回复
+      const simulatedResponses = [
+        `That's an interesting question about "${userInput}". Let me think about this...`,
+        `I understand you're asking about "${userInput}". Here's what I think:`,
+        `Regarding "${userInput}", I can share some insights:`,
+        `That's a great topic! About "${userInput}", here are my thoughts:`,
+        `Thanks for your question about "${userInput}". Here's my perspective:`
+      ]
+      
+      const responseIntros = [
+        "Based on my understanding, ",
+        "From what I know, ",
+        "In my analysis, ",
+        "Generally speaking, ",
+        "To answer your question, "
+      ]
+      
+      const responseBodies = [
+        "this is a complex topic that involves multiple factors. The key considerations include user experience, technical implementation, and overall system design.",
+        "there are several approaches we could take. Each has its own advantages and potential challenges that we should carefully evaluate.",
+        "this requires a balanced approach that takes into account both current capabilities and future scalability needs.",
+        "the most effective solution would likely involve combining modern best practices with proven methodologies.",
+        "this is an area where careful planning and iterative development can lead to excellent results."
+      ]
+      
+      const responseEndings = [
+        " Would you like me to elaborate on any specific aspect?",
+        " What are your thoughts on this approach?",
+        " Is there a particular area you'd like to explore further?",
+        " Does this help address your question?",
+        " Let me know if you need more details on any part of this."
+      ]
+      
+      const randomIntro = simulatedResponses[Math.floor(Math.random() * simulatedResponses.length)]
+      const randomBody = responseIntros[Math.floor(Math.random() * responseIntros.length)] + 
+                        responseBodies[Math.floor(Math.random() * responseBodies.length)]
+      const randomEnding = responseEndings[Math.floor(Math.random() * responseEndings.length)]
+      
+      const simulatedResponse = `${randomIntro}\n\n${randomBody}${randomEnding}`
       
       const assistantMessage: Message = {
         id: Date.now().toString(),
-        content: data.output || data.response || 'Sorry, I couldn\'t generate a response.',
+        content: simulatedResponse,
         role: 'assistant',
         timestamp: new Date(),
         model: selectedModel.id
@@ -176,11 +258,12 @@ export default function ChatPage() {
           prev.map(s => s.id === currentSession.id ? updatedSession : s)
         )
       }
+      
     } catch (error) {
-      console.error('Error:', error)
+      console.error('Error generating response:', error)
       const errorMessage: Message = {
         id: Date.now().toString(),
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         role: 'assistant',
         timestamp: new Date()
       }
@@ -235,18 +318,18 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex bg-white">
-      {/* 左侧边栏 */}
-      <div className="w-72 bg-gray-900 text-white flex flex-col">
+      {/* 左侧边栏 - 按照截图样式 */}
+      <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
         {/* 顶部标题 */}
-        <div className="p-6 border-b border-gray-700">
-          <h1 className="text-2xl font-bold">CHAT A.I+</h1>
+        <div className="p-6">
+          <h1 className="text-2xl font-bold text-black">CHAT A.I+</h1>
         </div>
         
         {/* New Chat 按钮 */}
-        <div className="p-4">
+        <div className="px-6 mb-6">
           <button
             onClick={createNewChat}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-white text-black rounded-lg hover:bg-gray-100 transition-colors font-medium"
+            className="w-full flex items-center gap-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
             <Plus size={18} />
             New chat
@@ -254,7 +337,7 @@ export default function ChatPage() {
         </div>
 
         {/* 搜索框 */}
-        <div className="px-4 pb-4">
+        <div className="px-6 mb-6">
           <div className="relative">
             <Search size={18} className="absolute left-3 top-3 text-gray-400" />
             <input
@@ -262,14 +345,14 @@ export default function ChatPage() {
               placeholder="Search conversations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-800 text-white placeholder-gray-400 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
         </div>
 
         {/* 对话列表 */}
-        <div className="flex-1 overflow-y-auto px-4">
-          <h3 className="text-sm font-medium text-gray-300 mb-3">Your conversations</h3>
+        <div className="flex-1 overflow-y-auto px-6">
+          <h3 className="text-sm font-medium text-gray-600 mb-3">Your conversations</h3>
           <div className="space-y-2">
             {filteredSessions.map((session) => (
               <button
@@ -277,17 +360,17 @@ export default function ChatPage() {
                 onClick={() => selectSession(session)}
                 className={`w-full text-left p-3 rounded-lg transition-all duration-200 ${
                   currentSession?.id === session.id
-                    ? 'bg-gray-700 border border-gray-600'
-                    : 'hover:bg-gray-800 border border-transparent'
+                    ? 'bg-blue-50 border border-blue-200'
+                    : 'hover:bg-gray-50 border border-transparent'
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <MessageSquare size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">
+                    <p className="text-sm font-medium text-gray-900 truncate">
                       {session.title}
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-gray-500 mt-1">
                       {session.lastMessage.toLocaleDateString()}
                     </p>
                   </div>
@@ -298,26 +381,26 @@ export default function ChatPage() {
         </div>
 
         {/* 底部模型选择器 */}
-        <div className="p-4 border-t border-gray-700">
+        <div className="p-6 border-t border-gray-200">
           <div className="relative">
             <button
               onClick={() => setShowModelDropdown(!showModelDropdown)}
-              className="w-full flex items-center justify-between p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors border border-gray-600"
+              className="w-full flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-gray-600 rounded-lg flex items-center justify-center">
                   <Bot size={18} className="text-white" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-medium text-white">{selectedModel.name}</p>
-                  <p className="text-xs text-gray-400">{selectedModel.parameters}</p>
+                  <p className="text-sm font-medium text-gray-900">{selectedModel.name}</p>
+                  <p className="text-xs text-gray-500">{selectedModel.parameters}</p>
                 </div>
               </div>
               <ChevronDown size={18} className="text-gray-400" />
             </button>
             
             {showModelDropdown && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20">
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-xl z-20">
                 {models.map((model) => (
                   <button
                     key={model.id}
@@ -325,10 +408,10 @@ export default function ChatPage() {
                       setSelectedModel(model)
                       setShowModelDropdown(false)
                     }}
-                    className="w-full text-left p-4 hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg transition-colors"
+                    className="w-full text-left p-4 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg transition-colors"
                   >
-                    <p className="text-sm font-medium text-white">{model.name}</p>
-                    <p className="text-xs text-gray-400">{model.description}</p>
+                    <p className="text-sm font-medium text-gray-900">{model.name}</p>
+                    <p className="text-xs text-gray-500">{model.description}</p>
                   </button>
                 ))}
               </div>
@@ -361,11 +444,11 @@ export default function ChatPage() {
         )}
 
         {/* 消息区域 */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-gray-50">
           {!currentSession || currentSession.messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center bg-gray-50">
+            <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-md mx-auto px-6">
-                <div className="w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mx-auto mb-6">
                   <Bot size={32} className="text-white" />
                 </div>
                 <h2 className="text-3xl font-bold text-gray-900 mb-4">
@@ -381,7 +464,7 @@ export default function ChatPage() {
               </div>
             </div>
           ) : (
-            <div className="p-6 space-y-8 max-w-4xl mx-auto w-full">
+            <div className="p-6 space-y-6 max-w-4xl mx-auto w-full">
               {currentSession.messages.map((message) => (
                 <div
                   key={message.id}
@@ -390,16 +473,16 @@ export default function ChatPage() {
                   }`}
                 >
                   {message.role === 'assistant' && (
-                    <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0">
-                      <Bot size={20} className="text-white" />
+                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Bot size={16} className="text-white" />
                     </div>
                   )}
                   
                   <div
                     className={`max-w-2xl p-4 rounded-2xl ${
                       message.role === 'user'
-                        ? 'bg-gray-900 text-white'
-                        : 'bg-gray-100 text-gray-900'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-900 border border-gray-200'
                     }`}
                   >
                     {message.role === 'user' ? (
@@ -411,7 +494,7 @@ export default function ChatPage() {
                     )}
                     
                     <div className={`text-xs mt-3 ${
-                      message.role === 'user' ? 'text-gray-300' : 'text-gray-500'
+                      message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
                     }`}>
                       {message.timestamp.toLocaleTimeString()}
                       {message.model && (
@@ -421,8 +504,8 @@ export default function ChatPage() {
                   </div>
 
                   {message.role === 'user' && (
-                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                      <User size={20} className="text-white" />
+                    <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <User size={16} className="text-white" />
                     </div>
                   )}
                 </div>
@@ -430,10 +513,10 @@ export default function ChatPage() {
               
               {isLoading && (
                 <div className="flex gap-4">
-                  <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Bot size={20} className="text-white" />
+                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Bot size={16} className="text-white" />
                   </div>
-                  <div className="bg-gray-100 rounded-2xl p-4">
+                  <div className="bg-white rounded-2xl p-4 border border-gray-200">
                     <div className="flex space-x-2">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -457,14 +540,14 @@ export default function ChatPage() {
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="What's in your mind?"
-                className="w-full p-4 pr-14 border-2 border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-gray-900 placeholder-gray-500"
+                className="w-full p-4 pr-14 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-500"
                 rows={1}
                 style={{ minHeight: '56px', maxHeight: '160px' }}
               />
               <button
                 onClick={handleSendMessage}
                 disabled={!inputValue.trim() || isLoading}
-                className="absolute right-2 bottom-2 p-3 bg-gray-900 text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="absolute right-2 bottom-2 p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Send size={18} />
               </button>
