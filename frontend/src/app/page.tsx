@@ -432,6 +432,12 @@ export default function ChatPage() {
         {/* 顶部标题 */}
         <div className="p-6">
           <h1 className="text-2xl font-bold text-black">CHAT A.I+</h1>
+          <a 
+            href="/test" 
+            className="text-sm text-blue-600 hover:text-blue-800 underline mt-2 block"
+          >
+            🔧 API 测试页面
+          </a>
         </div>
         
         {/* New Chat 按钮 */}
