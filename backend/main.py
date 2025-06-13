@@ -10,7 +10,9 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# 尝试加载.env文件，如果文件不存在也不会报错
+load_dotenv("config.env", override=True)
+load_dotenv(".env", override=False)
 
 app = FastAPI(title="AI Chat API", version="1.0.0")
 

@@ -1,0 +1,20 @@
+[build]
+builder = "docker"
+base_image = "nvidia/cuda:12.1-devel-ubuntu22.04"
+
+[deployment]
+name = "text-generation-chat"
+container_disk_in_gb = 50
+gpu_count = 1
+gpu_type = "RTX4090"
+min_workers = 0
+max_workers = 5
+idle_timeout = 300
+
+[env]
+MODEL_PATH_8X3B = "/runpod-volume/text_models/L3.2-8X3B.gguf"
+MODEL_PATH_8X4B = "/runpod-volume/text_models/L3.2-8X4B.gguf"
+
+[volumes]
+mount_path = "/runpod-volume"
+size_gb = 100 

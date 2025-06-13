@@ -28,7 +28,7 @@ jobs:
     - name: Build frontend
       working-directory: frontend
       env:
-        NEXT_PUBLIC_API_URL: ${{ secrets.API_URL }}
+        NEXT_PUBLIC_API_URL: ${{ secrets.API_URL || 'https://api-text-generation.runpod.app' }}
         NEXT_PUBLIC_R2_BUCKET: text-generation
       run: npm run build
     
@@ -40,6 +40,7 @@ jobs:
         projectName: text-generation-chat
         directory: frontend/out
         gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+        wranglerVersion: '3'
 
   # 后端API部署
   deploy-backend:
