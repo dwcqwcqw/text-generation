@@ -27,7 +27,7 @@ app.add_middleware(
 
 # 配置
 RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY")
-RUNPOD_ENDPOINT = os.getenv("RUNPOD_ENDPOINT", "https://api.runpod.ai/v2/llama-text-gen/runsync")
+RUNPOD_ENDPOINT = os.getenv("RUNPOD_ENDPOINT", "https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync")
 CLOUDFLARE_ACCESS_KEY = os.getenv("CLOUDFLARE_ACCESS_KEY")
 CLOUDFLARE_SECRET_KEY = os.getenv("CLOUDFLARE_SECRET_KEY")
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://c7c141ce43d175e60601edc46d904553.r2.cloudflarestorage.com")
@@ -388,4 +388,4 @@ if __name__ == "__main__":
     port = int(os.getenv("API_PORT", 8000))
     debug = os.getenv("DEBUG", "false").lower() == "true"
     
-    uvicorn.run(app, host=host, port=port, debug=debug) 
+    uvicorn.run(app, host=host, port=port, reload=debug) 

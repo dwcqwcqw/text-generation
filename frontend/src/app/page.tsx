@@ -168,60 +168,91 @@ export default function ChatPage() {
   const generateResponse = async (userInput: string, history: Message[] = []) => {
     setIsLoading(true)
 
+    // RunPod API 配置
+    const RUNPOD_API_KEY = process.env.NEXT_PUBLIC_RUNPOD_API_KEY || ''
+    const RUNPOD_ENDPOINT = 'https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync'
+    
+    // 如果没有配置API Key，直接使用模拟模式
+    if (!RUNPOD_API_KEY) {
+      console.log('No RunPod API key configured, using simulated responses')
+    }
+    
     try {
-      console.log('Sending request to API:', {
-        url: `${process.env.NEXT_PUBLIC_API_URL}/chat`,
-        data: {
-          prompt: userInput,
-          model: selectedModel.id,
-          max_length: 150,
-          temperature: 0.7
-        }
+      console.log('Sending request to RunPod API:', {
+        url: RUNPOD_ENDPOINT,
+        model: selectedModel.id
       })
 
-      // 首先尝试API调用
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chat`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            prompt: userInput,
-            model: selectedModel.id,
-            max_length: 150,
-            temperature: 0.7
+      // 根据模型ID设置正确的模型路径
+      const model_paths = {
+        "L3.2-8X3B": "/runpod-volume/text_models/L3.2-8X3B.gguf",
+        "L3.2-8X4B": "/runpod-volume/text_models/L3.2-8X4B.gguf"
+      }
+      
+      const model_path = model_paths[selectedModel.id as keyof typeof model_paths] || model_paths["L3.2-8X3B"]
+
+      // 构建适合Llama模型的提示词
+      const llama_prompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful, harmless, and honest assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${userInput}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`
+
+      // 首先尝试RunPod API调用（如果有API Key）
+      if (RUNPOD_API_KEY) {
+        try {
+          const response = await fetch(RUNPOD_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${RUNPOD_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              input: {
+                model_path: model_path,
+                prompt: llama_prompt,
+                max_tokens: 150,
+                temperature: 0.7,
+                top_p: 0.9,
+                repeat_penalty: 1.05,
+                stop: ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>"],
+                stream: false
+              }
+            })
           })
-        })
 
-        console.log('Response status:', response.status)
-        
-        if (response.ok) {
-          const data = await response.json()
-          console.log('API Response:', data)
+          console.log('RunPod response status:', response.status)
           
-          const assistantMessage: Message = {
-            id: Date.now().toString(),
-            content: data.output || data.response || data.generated_text || 'Sorry, I couldn\'t generate a response.',
-            role: 'assistant',
-            timestamp: new Date(),
-            model: selectedModel.id
-          }
-
-          if (currentSession) {
-            const updatedMessages = [...(history.length > 0 ? history : currentSession.messages), assistantMessage]
-            const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+          if (response.ok) {
+            const data = await response.json()
+            console.log('RunPod Response:', data)
             
-            setCurrentSession(updatedSession)
-            setChatSessions(prev => 
-              prev.map(s => s.id === currentSession.id ? updatedSession : s)
-            )
+            let aiResponse = ''
+            if (data.status === "COMPLETED" && data.output?.text) {
+              aiResponse = data.output.text.replace(llama_prompt, "").trim()
+            }
+            
+            if (aiResponse) {
+              const assistantMessage: Message = {
+                id: Date.now().toString(),
+                content: aiResponse,
+                role: 'assistant',
+                timestamp: new Date(),
+                model: selectedModel.id
+              }
+
+              if (currentSession) {
+                const updatedMessages = [...(history.length > 0 ? history : currentSession.messages), assistantMessage]
+                const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+                
+                setCurrentSession(updatedSession)
+                setChatSessions(prev => 
+                  prev.map(s => s.id === currentSession.id ? updatedSession : s)
+                )
+              }
+              setIsLoading(false)
+              return
+            }
           }
-          setIsLoading(false)
-          return
+        } catch (apiError) {
+          console.log('RunPod API not available, using offline mode:', apiError)
         }
-      } catch (apiError) {
-        console.log('API not available, using offline mode:', apiError)
       }
 
       // 如果API不可用，使用模拟回复
