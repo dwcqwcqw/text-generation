@@ -65,7 +65,7 @@ python -c "import runpod; from runpod.serverless import start; print('成功')"
 
 ### 4. 测试API
 使用测试页面 `/test` 验证连接：
-1. 输入正确的API Key: `rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb`
+1. 输入你的RunPod API Key (格式: rpa_开头的字符串)
 2. 点击"保存"
 3. 测试健康检查
 4. 测试API调用

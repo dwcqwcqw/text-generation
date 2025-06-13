@@ -321,7 +321,7 @@ export default function TestPage() {
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-6">
           <h3 className="text-lg font-medium text-yellow-800 mb-2">使用说明</h3>
           <ul className="text-sm text-yellow-700 space-y-1">
-            <li>• 首先输入API Key: <code>rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb</code></li>
+                         <li>• 首先输入你的RunPod API Key (格式: rpa_开头)</li>
             <li>• 点击"保存"将API Key保存到本地</li>
             <li>• 按顺序测试：状态 → 健康 → API调用</li>
             <li>• 查看浏览器开发者工具的Console获取更多调试信息</li>
@@ -392,7 +392,7 @@ export default function TestPage() {
            <h3 className="text-lg font-medium text-green-800 mb-2">📝 下一步行动</h3>
            <ol className="text-sm text-green-700 space-y-1 list-decimal list-inside">
              <li>访问 <a href="https://runpod.io" target="_blank" className="underline">RunPod控制台</a></li>
-             <li>找到Endpoint ID: <code>4cx6jtjdx6hdhr</code></li>
+                            <li>找到你的Endpoint ID</li>
              <li>点击"View Logs"查看实时日志</li>
              <li>寻找错误信息，特别是模型加载相关的错误</li>
              <li>如果看到"模型文件未找到"，需要重新上传模型</li>
