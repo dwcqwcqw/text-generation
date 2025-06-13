@@ -6,19 +6,21 @@ set -e
 
 echo "🧪 Testing deployment configuration..."
 
-# 测试wrangler.toml格式
+# 测试是否移除了wrangler.toml（推荐做法）
 echo "📋 Checking wrangler.toml..."
 if [ -f "wrangler.toml" ]; then
-    echo "✅ wrangler.toml exists"
-    # 检查关键配置
-    if grep -q "pages_build_output_dir" wrangler.toml; then
-        echo "✅ pages_build_output_dir found"
-    else
-        echo "❌ pages_build_output_dir missing"
-        exit 1
-    fi
+    echo "⚠️  wrangler.toml exists (may cause issues with Pages)"
+    echo "   Recommend configuring build settings in Cloudflare Dashboard instead"
 else
-    echo "❌ wrangler.toml not found"
+    echo "✅ wrangler.toml not found (good for Pages deployment)"
+fi
+
+# 检查配置文档
+echo "📋 Checking configuration documentation..."
+if [ -f "cloudflare-pages-config.md" ]; then
+    echo "✅ Configuration documentation exists"
+else
+    echo "❌ Configuration documentation missing"
     exit 1
 fi
 
@@ -57,6 +59,13 @@ fi
 
 if [ -f "runpod/requirements.txt" ]; then
     echo "✅ requirements.txt exists"
+    
+    # 检查是否使用了有问题的依赖
+    if grep -q "llama-cpp-python" runpod/requirements.txt; then
+        echo "⚠️  llama-cpp-python detected (may cause build issues)"
+    else
+        echo "✅ No problematic dependencies detected"
+    fi
 else
     echo "❌ runpod/requirements.txt missing"
     exit 1
@@ -72,5 +81,10 @@ fi
 echo "🎉 All deployment configuration checks passed!"
 echo ""
 echo "🚀 Ready for deployment:"
-echo "   Frontend: Push to GitHub, auto-deployed to Cloudflare Pages"
-echo "   Backend: Build Docker image and deploy to RunPod" 
+echo "   Frontend: Configure in Cloudflare Pages Dashboard (see cloudflare-pages-config.md)"
+echo "   Backend: Build Docker image and deploy to RunPod"
+echo ""
+echo "📖 Next steps:"
+echo "   1. Push code to GitHub"
+echo "   2. Configure Cloudflare Pages settings manually"
+echo "   3. Deploy backend to RunPod" 
