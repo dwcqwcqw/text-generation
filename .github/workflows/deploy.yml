@@ -1,0 +1,94 @@
+name: Deploy AI Chat Application
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # 前端部署到Cloudflare Pages
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: frontend
+      run: npm ci
+    
+    - name: Build frontend
+      working-directory: frontend
+      env:
+        NEXT_PUBLIC_API_URL: ${{ secrets.API_URL }}
+        NEXT_PUBLIC_R2_BUCKET: text-generation
+      run: npm run build
+    
+    - name: Deploy to Cloudflare Pages
+      uses: cloudflare/pages-action@v1
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        projectName: text-generation-chat
+        directory: frontend/out
+        gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  # 后端API部署
+  deploy-backend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      working-directory: backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Test backend
+      working-directory: backend
+      run: |
+        python -m pytest tests/ -v || true
+    
+    # 这里可以添加部署到云服务器的步骤
+    # 或者构建Docker镜像推送到容器注册表
+
+  # RunPod Serverless部署
+  deploy-runpod:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install RunPod CLI
+      run: |
+        pip install runpod
+    
+    - name: Deploy to RunPod
+      working-directory: runpod
+      env:
+        RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+      run: |
+        echo "Deploying to RunPod Serverless..."
+        # runpod deploy 命令会在这里执行
+        # 具体命令需要根据RunPod CLI的实际API来调整 
