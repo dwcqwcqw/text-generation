@@ -1,11 +1,14 @@
 name = "text-generation-chat"
 compatibility_date = "2024-01-15"
 
+# Cloudflare Pages配置
+pages_build_output_dir = "frontend/out"
+
 [build]
 command = "./build.sh"
 cwd = "."
 
-[build.environment_variables]
+[env.production.vars]
 NODE_VERSION = "18"
 NEXT_PUBLIC_API_URL = "https://api-text-generation.runpod.app"
 NEXT_PUBLIC_R2_BUCKET = "text-generation"

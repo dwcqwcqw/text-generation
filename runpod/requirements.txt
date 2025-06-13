@@ -1,3 +1,8 @@
 runpod==1.5.1
-llama-cpp-python==0.2.11
-numpy==1.24.3 
+# 使用CPU版本避免编译问题
+llama-cpp-python
+numpy==1.24.3
+fastapi
+uvicorn
+pydantic
+python-multipart 
