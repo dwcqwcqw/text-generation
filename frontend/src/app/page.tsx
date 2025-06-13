@@ -168,11 +168,29 @@ export default function ChatPage() {
   const generateResponse = async (userInput: string, history: Message[] = []) => {
     setIsLoading(true)
 
-    // RunPod API 配置
-    const RUNPOD_API_KEY = process.env.NEXT_PUBLIC_RUNPOD_API_KEY || ''
-    const RUNPOD_ENDPOINT_ID = process.env.RUNPOD_ENDPOINT_ID || '4cx6jtjdx6hdhr'
-    const VITE_API_BASE_URL = process.env.VITE_API_BASE_URL || 'https://api.runpod.ai/v2'
+    // RunPod API 配置 - 尝试多种环境变量名称
+    const RUNPOD_API_KEY = process.env.NEXT_PUBLIC_RUNPOD_API_KEY || 
+                          process.env.RUNPOD_API_KEY || 
+                          ''
+    const RUNPOD_ENDPOINT_ID = process.env.NEXT_PUBLIC_RUNPOD_ENDPOINT_ID || 
+                              process.env.RUNPOD_ENDPOINT_ID || 
+                              '4cx6jtjdx6hdhr'
+    const VITE_API_BASE_URL = process.env.NEXT_PUBLIC_VITE_API_BASE_URL || 
+                             process.env.VITE_API_BASE_URL || 
+                             'https://api.runpod.ai/v2'
     const RUNPOD_ENDPOINT = `${VITE_API_BASE_URL}/${RUNPOD_ENDPOINT_ID}/runsync`
+    
+    // 环境变量调试信息
+    console.log('Environment Variables Debug:', {
+      NEXT_PUBLIC_RUNPOD_API_KEY: process.env.NEXT_PUBLIC_RUNPOD_API_KEY ? 'SET' : 'NOT SET',
+      RUNPOD_API_KEY: process.env.RUNPOD_API_KEY ? 'SET' : 'NOT SET',
+      NEXT_PUBLIC_RUNPOD_ENDPOINT_ID: process.env.NEXT_PUBLIC_RUNPOD_ENDPOINT_ID || 'NOT SET',
+      RUNPOD_ENDPOINT_ID: process.env.RUNPOD_ENDPOINT_ID || 'NOT SET',
+      NEXT_PUBLIC_VITE_API_BASE_URL: process.env.NEXT_PUBLIC_VITE_API_BASE_URL || 'NOT SET',
+      VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || 'NOT SET',
+      finalApiKey: RUNPOD_API_KEY ? 'CONFIGURED' : 'NOT CONFIGURED',
+      finalEndpoint: RUNPOD_ENDPOINT
+    })
     
     // 如果没有配置API Key，直接使用模拟模式
     if (!RUNPOD_API_KEY) {
