@@ -5,8 +5,9 @@ import { useState } from 'react'
 export default function TestPage() {
   const [testResult, setTestResult] = useState('')
   const [loading, setLoading] = useState(false)
-  const [apiKey, setApiKey] = useState('rpa_YT0BFBFZYAZM90qZoMzEGfv4rNRGlxCEzJpKFFEWyQXOe')
+  const [apiKey, setApiKey] = useState('rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb')
   const [endpoint, setEndpoint] = useState('https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync')
+  const [endpointId, setEndpointId] = useState('4cx6jtjdx6hdhr')
   const [prompt, setPrompt] = useState('Hello, how are you today?')
 
   const testRunPodAPI = async () => {
@@ -78,6 +79,49 @@ export default function TestPage() {
     setLoading(false)
   }
 
+  const testRunPodStatus = async () => {
+    setLoading(true)
+    setTestResult('Checking RunPod status...')
+
+    try {
+      // Test endpoint status first
+      const statusEndpoint = `https://api.runpod.ai/v2/${endpointId}/status`
+      console.log('Checking endpoint status:', statusEndpoint)
+
+      const statusResponse = await fetch(statusEndpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        }
+      })
+
+      console.log('Status Response:', statusResponse.status)
+      const statusText = await statusResponse.text()
+      console.log('Status Response Text:', statusText)
+
+      let statusData
+      try {
+        statusData = JSON.parse(statusText)
+      } catch (e) {
+        setTestResult(`❌ Status Check - Invalid JSON:\n${statusText}`)
+        setLoading(false)
+        return
+      }
+
+      if (statusResponse.ok) {
+        setTestResult(`✅ RunPod Endpoint Status:\n${JSON.stringify(statusData, null, 2)}`)
+      } else {
+        setTestResult(`❌ Status Check Failed (${statusResponse.status}):\n${JSON.stringify(statusData, null, 2)}`)
+      }
+
+    } catch (error) {
+      console.error('Status Check Error:', error)
+      setTestResult(`❌ Status Check Network Error:\n${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    setLoading(false)
+  }
+
   const testEnvironmentVariables = () => {
     const envInfo = {
       'NEXT_PUBLIC_RUNPOD_API_KEY': process.env.NEXT_PUBLIC_RUNPOD_API_KEY || 'NOT SET',
@@ -119,17 +163,32 @@ export default function TestPage() {
               />
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Endpoint:
-              </label>
-              <input
-                type="text"
-                value={endpoint}
-                onChange={(e) => setEndpoint(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+                         <div>
+               <label className="block text-sm font-medium text-gray-700 mb-2">
+                 Endpoint ID:
+               </label>
+               <input
+                 type="text"
+                 value={endpointId}
+                 onChange={(e) => {
+                   setEndpointId(e.target.value)
+                   setEndpoint(`https://api.runpod.ai/v2/${e.target.value}/runsync`)
+                 }}
+                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+               />
+             </div>
+             
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-2">
+                 Complete Endpoint:
+               </label>
+               <input
+                 type="text"
+                 value={endpoint}
+                 onChange={(e) => setEndpoint(e.target.value)}
+                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+               />
+             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -148,22 +207,30 @@ export default function TestPage() {
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">测试按钮</h2>
           
-          <div className="space-x-4">
-            <button
-              onClick={testRunPodAPI}
-              disabled={loading}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? '测试中...' : '测试 RunPod API'}
-            </button>
-            
-            <button
-              onClick={testEnvironmentVariables}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
-              检查环境变量
-            </button>
-          </div>
+                     <div className="space-x-4 space-y-2 flex flex-wrap">
+             <button
+               onClick={testRunPodStatus}
+               disabled={loading}
+               className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               {loading ? '检查中...' : '检查 RunPod 状态'}
+             </button>
+             
+             <button
+               onClick={testRunPodAPI}
+               disabled={loading}
+               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               {loading ? '测试中...' : '测试 RunPod API'}
+             </button>
+             
+             <button
+               onClick={testEnvironmentVariables}
+               className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+             >
+               检查环境变量
+             </button>
+           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">

@@ -199,7 +199,7 @@ export default function ChatPage() {
     })
     
     // 临时硬编码测试 - 如果环境变量完全无法读取，使用这个
-    const FALLBACK_API_KEY = 'rpa_YT0BFBFZYAZM90qZoMzEGfv4rNRGlxCEzJpKFFEWyQXOe'
+    const FALLBACK_API_KEY = 'rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb'
     const FINAL_API_KEY = RUNPOD_API_KEY || FALLBACK_API_KEY
     
     console.log('Using API Key:', FINAL_API_KEY ? `${FINAL_API_KEY.substring(0, 10)}...` : 'NONE')
