@@ -1,12 +1,14 @@
 # Cloudflare Pages 配置说明
 
-由于 wrangler.toml 对 Pages 项目的支持有限，请在 Cloudflare Dashboard 中手动配置以下设置：
+⚠️ **重要**：由于前端部署显示"No build command specified"，必须在 Cloudflare Dashboard 中手动配置构建设置！
 
 ## 项目配置
 
-### 构建设置
+### 构建设置 (必须配置)
+在 Cloudflare Dashboard > Pages > 项目设置 > Settings > Build & deployments 中设置：
+
 - **框架预设**: None
-- **构建命令**: `./build.sh`
+- **构建命令**: `./build.sh`  ⭐ **必须设置这个！**
 - **构建输出目录**: `frontend/out`
 - **根目录**: `/` (默认)
 
@@ -27,12 +29,27 @@ NEXT_PUBLIC_API_URL=https://preview-api-text-generation.runpod.app
 NEXT_PUBLIC_R2_BUCKET=text-generation-preview
 ```
 
-## 部署流程
+## 部署状态
 
-1. 推送代码到 GitHub
-2. Cloudflare Pages 会自动检测更改
-3. 使用配置的构建命令进行构建
-4. 部署到全球 CDN
+### ✅ 前端部署成功
+- 网站已成功部署到 Cloudflare Pages
+- 但构建步骤被跳过，需要手动配置构建命令
+
+### ❌ 后端部署失败
+- PyTorch 版本格式已修复
+- 需要重新触发 RunPod 构建
+
+## 立即操作
+
+1. **配置 Cloudflare Pages 构建命令**：
+   - 进入 Cloudflare Dashboard
+   - 找到你的 Pages 项目
+   - Settings > Build & deployments
+   - 设置构建命令为：`./build.sh`
+
+2. **重新部署后端**：
+   - requirements.txt 已修复
+   - 推送新代码触发 RunPod 重新构建
 
 ## 注意事项
 

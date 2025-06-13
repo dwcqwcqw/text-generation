@@ -1,7 +1,7 @@
 runpod==1.5.1
-# 使用轻量级依赖，避免编译问题
+# 使用正确的依赖格式，避免版本冲突
 transformers==4.35.2
-torch==2.0.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
+torch==2.0.1
 numpy==1.24.3
 fastapi==0.103.2
 uvicorn==0.23.2
