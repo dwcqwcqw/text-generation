@@ -15,16 +15,12 @@ body {
   max-width: 100vw;
   overflow-x: hidden;
   font-family: 'Inter', sans-serif;
+  height: 100%;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  background: #f9fafb;
+  color: #111827;
 }
 
 a {
@@ -44,26 +40,119 @@ a {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #f3f4f6;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: #d1d5db;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: #9ca3af;
+}
+
+/* Message animations */
+.message-bubble {
+  animation: slideInUp 0.4s ease-out;
+}
+
+@keyframes slideInUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0);
+  }
+}
+
+/* Smooth transitions */
+.transition-all {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Loading animation */
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  } 40% {
+    transform: scale(1);
+  }
+}
+
+.animate-bounce {
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+/* Input focus effects */
+.input-focus {
+  @apply focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200;
+}
+
+/* Button hover effects */
+.btn-primary {
+  @apply bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors duration-200;
+}
+
+/* Chat session hover effects */
+.chat-session:hover {
+  @apply bg-gray-50 transform scale-[1.02] transition-all duration-200;
+}
+
+.chat-session.active {
+  @apply bg-blue-50 border-blue-200 shadow-sm;
+}
+
+/* Prose customization for markdown */
+.prose {
+  @apply text-gray-700;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  @apply text-gray-900;
+}
+
+.prose code {
+  @apply bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-sm;
+}
+
+.prose pre {
+  @apply bg-gray-50 border border-gray-200 rounded-lg;
+}
+
+/* Dropdown animations */
+.dropdown-enter {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+}
+
+.dropdown-enter-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: all 200ms ease-out;
+}
+
+.dropdown-exit {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.dropdown-exit-active {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+  transition: all 150ms ease-in;
 }
 
 /* Chat specific styles */
 .chat-container {
   height: 100vh;
   background-color: #f7f7f8;
-}
-
-.message-bubble {
-  animation: fadeIn 0.3s ease-in;
 }
 
 @keyframes fadeIn {
