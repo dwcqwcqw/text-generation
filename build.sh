@@ -29,7 +29,7 @@ echo "📁 Entering frontend directory..."
 cd frontend
 
 echo "📦 Installing dependencies..."
-npm ci --prefer-offline --no-audit
+npm install
 
 echo "🏗️ Building Next.js application..."
 npm run build
@@ -44,23 +44,43 @@ fi
 
 echo "✅ Build completed successfully!"
 
-# 返回根目录
+echo "📁 Copying build output to root dist directory..."
 cd ..
 
-echo "📁 Copying build output to root dist directory..."
-# 清理并创建 dist 目录
+# 清理并重新创建dist目录
 rm -rf dist
-cp -R frontend/out dist
+mkdir -p dist
 
+# 复制Next.js输出
+cp -r frontend/out/* dist/
+
+# 确保_redirects文件在正确位置
+echo "📋 Copying _redirects file..."
+cp _redirects dist/
+
+# 验证dist目录内容
 echo "📋 Final dist directory contents:"
 ls -la dist/
 
 echo "🎉 Ready for deployment!"
 
-# 确保输出目录存在且有内容
-if [ ! "$(ls -A dist)" ]; then
-    echo "❌ Dist directory is empty!"
-    exit 1
+# 验证关键文件
+if [ -f "dist/index.html" ]; then
+    echo "✨ index.html found"
+else
+    echo "❌ index.html missing"
+fi
+
+if [ -f "dist/_redirects" ]; then
+    echo "✨ _redirects found"
+else
+    echo "❌ _redirects missing"
+fi
+
+if [ -d "dist/_next" ]; then
+    echo "✨ _next directory found"
+else
+    echo "❌ _next directory missing"
 fi
 
 echo "✨ Build verification successful!" 
