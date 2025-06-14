@@ -8,8 +8,8 @@ FROM nvidia/cuda:12.1-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV CUDA_VISIBLE_DEVICES=0
-ENV LLAMA_CUBLAS=1
-ENV CMAKE_ARGS="-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=89"
+ENV GGML_CUDA=1
+ENV CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=89"
 ENV FORCE_CMAKE=1
 ENV CUDA_LAUNCH_BLOCKING=1
 
@@ -41,9 +41,12 @@ COPY requirements.txt .
 RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # 强制重新编译llama-cpp-python with CUDA支持
-RUN CMAKE_ARGS="-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=89" \
+RUN CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=89" \
     FORCE_CMAKE=1 \
     pip install --no-cache-dir --force-reinstall llama-cpp-python==0.3.9
+
+# 验证CUDA编译
+RUN python -c "import llama_cpp; print('llama-cpp-python version:', llama_cpp.__version__)"
 
 # 安装其他依赖
 RUN pip install --no-cache-dir -r requirements.txt
