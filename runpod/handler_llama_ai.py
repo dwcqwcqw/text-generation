@@ -124,62 +124,32 @@ def discover_models():
 def load_gguf_model(model_path: str, use_gpu: bool = True):
     """Load GGUF model using llama-cpp-python with GPU support"""
     try:
-        # Force set CUDA environment variables
-        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-        os.environ['LLAMA_CUBLAS'] = '1'
-        
         from llama_cpp import Llama
         import llama_cpp
         
         logger.info(f"llama-cpp-python version: {llama_cpp.__version__}")
         logger.info(f"Loading GGUF model from {model_path}")
         
-        # Conservative GPU settings to avoid crashes
-        if use_gpu:
-            n_gpu_layers = 25  # Conservative number of GPU layers
-        else:
-            n_gpu_layers = 0
+        # Start with CPU-only to avoid crashes
+        logger.info("Starting with CPU-only loading to ensure stability...")
         
-        logger.info(f"GPU layers: {n_gpu_layers}, Use GPU: {use_gpu}")
-        
-        # Load with conservative settings
         model = Llama(
             model_path=model_path,
-            n_ctx=1024,  # Smaller context for stability
-            n_batch=128,  # Smaller batch size
-            n_gpu_layers=n_gpu_layers,
-            verbose=False,  # Reduce verbose output
-            n_threads=1,  # Single thread
+            n_ctx=512,  # Very small context
+            n_batch=32,  # Very small batch
+            n_gpu_layers=0,  # CPU only for now
+            verbose=False,
+            n_threads=1,
             use_mmap=True,
             use_mlock=False,
-            f16_kv=True,
-            low_vram=True,  # Enable low VRAM mode
         )
         
-        logger.info("GGUF model loaded successfully")
+        logger.info("GGUF model loaded successfully on CPU")
         return model, "gguf"
         
     except Exception as e:
-        logger.error(f"GPU loading failed: {e}")
-        
-        # CPU fallback
-        try:
-            logger.info("Attempting CPU fallback...")
-            model = Llama(
-                model_path=model_path,
-                n_ctx=512,  # Even smaller context for CPU
-                n_batch=64,
-                n_gpu_layers=0,
-                verbose=False,
-                n_threads=2,
-                use_mmap=True,
-                use_mlock=False,
-            )
-            logger.info("GGUF model loaded on CPU")
-            return model, "gguf"
-        except Exception as e2:
-            logger.error(f"CPU fallback also failed: {e2}")
-            return None, None
+        logger.error(f"Model loading failed: {e}")
+        return None, None
 
 def load_transformers_model(model_path: str, use_gpu: bool = True):
     """Load model using transformers library with GPU support"""
@@ -209,17 +179,13 @@ def load_transformers_model(model_path: str, use_gpu: bool = True):
         return None, None, None
 
 def initialize_model():
-    """Initialize the best available model with GPU support"""
+    """Initialize the best available model with CPU-only for stability"""
     global model, tokenizer, model_type, model_path
     
-    logger.info("Starting model initialization...")
+    logger.info("Starting simplified model initialization...")
     
-    # Check GPU availability
-    gpu_available, gpu_count, gpu_name = check_gpu()
-    logger.info(f"GPU Status: Available={gpu_available}, Count={gpu_count}, Name={gpu_name}")
-    
-    # Start GPU monitoring
-    start_gpu_monitoring()
+    # Skip GPU checks for now to avoid crashes
+    logger.info("Skipping GPU checks, using CPU-only mode for stability")
     
     # Discover available models
     available_models = discover_models()
@@ -228,15 +194,15 @@ def initialize_model():
         logger.error("No models found in the specified paths")
         return False
     
-    # Try to load the best model (prefer 8X4B over 8X3B)
+    # Try to load the smaller model first (8X4B is smaller than 8X3B)
     for model_path_candidate, size in available_models:
         logger.info(f"Attempting to load model: {model_path_candidate} ({size:.1f}GB)")
         
-        # Try GGUF first (more efficient)
+        # Only try GGUF for now
         if model_path_candidate.endswith('.gguf'):
             try:
-                logger.info("Loading GGUF model...")
-                loaded_model, loaded_type = load_gguf_model(model_path_candidate, gpu_available)
+                logger.info("Loading GGUF model in CPU-only mode...")
+                loaded_model, loaded_type = load_gguf_model(model_path_candidate, False)  # Force CPU
                 if loaded_model:
                     model = loaded_model
                     model_type = loaded_type
@@ -248,21 +214,7 @@ def initialize_model():
                     logger.warning("GGUF model loading returned None")
             except Exception as e:
                 logger.error(f"Exception during GGUF loading: {e}")
-        
-        # Try Transformers as fallback
-        try:
-            logger.info("Trying Transformers model as fallback...")
-            loaded_model, loaded_tokenizer, loaded_type = load_transformers_model(model_path_candidate, gpu_available)
-            if loaded_model:
-                model = loaded_model
-                tokenizer = loaded_tokenizer
-                model_type = loaded_type
-                model_path = model_path_candidate
-                logger.info(f"Successfully loaded Transformers model: {model_path}")
-                logger.info("Model initialization completed successfully!")
-                return True
-        except Exception as e:
-            logger.error(f"Exception during Transformers loading: {e}")
+                continue  # Try next model
     
     logger.error("Failed to load any model")
     return False
