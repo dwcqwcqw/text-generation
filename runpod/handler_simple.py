@@ -8,6 +8,7 @@ import os
 import sys
 import json
 import logging
+import runpod
 
 # 首先尝试导入RunPod
 try:
@@ -25,33 +26,35 @@ print(f"RunPod属性: {dir(runpod)}")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Simple response without model
 def handler(event):
-    """简化的处理函数"""
+    """Simple handler that returns a test response without loading any model"""
     try:
-        logger.info(f"收到事件: {event}")
+        logger.info("Handler called with event")
         
-        # 获取输入
-        input_data = event.get("input", {})
-        prompt = input_data.get("prompt", "Hello")
+        # Extract input
+        user_input = event.get("input", {})
+        prompt = user_input.get("prompt", "Hello")
+        personality = user_input.get("personality", "default")
         
-        # 简单响应
-        response = {
-            "output": f"Echo: {prompt}",
+        logger.info(f"Received prompt: {prompt}")
+        logger.info(f"Personality: {personality}")
+        
+        # Return a simple test response
+        response = f"[Test Mode] Echo: {prompt} (Personality: {personality})"
+        
+        logger.info(f"Returning response: {response}")
+        
+        return {
+            "output": response,
             "status": "success",
-            "debug_info": {
-                "runpod_version": getattr(runpod, '__version__', 'unknown'),
-                "python_version": sys.version,
-                "available_modules": dir(runpod)
-            }
+            "model": "test-mode"
         }
         
-        logger.info(f"返回响应: {response}")
-        return response
-        
     except Exception as e:
-        logger.error(f"处理错误: {e}")
+        logger.error(f"Error in handler: {e}")
         return {
-            "error": str(e),
+            "output": f"Error: {str(e)}",
             "status": "error"
         }
 
@@ -123,11 +126,10 @@ def main():
             if not attr.startswith('_'):
                 print(f"  - {attr}: {type(getattr(runpod, attr))}")
 
+# Start the serverless handler
 if __name__ == "__main__":
-    # 测试模式
-    test_event = {"input": {"prompt": "测试消息"}}
-    result = handler(test_event)
-    print("测试结果:", json.dumps(result, indent=2, ensure_ascii=False))
+    logger.info("Starting simple test handler...")
+    runpod.serverless.start({"handler": handler})
 else:
     # 启动服务
     main() 

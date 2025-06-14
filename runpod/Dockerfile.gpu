@@ -1,5 +1,5 @@
 # RunPod Serverless Dockerfile
-# 针对NVIDIA L4 GPU (计算能力8.9) 优化
+# 针对NVIDIA L4 GPU (计算能力8.9) 优化 - 强制GPU模式
 
 FROM runpod/pytorch:2.0.1-py3.10-cuda11.8.0-devel-ubuntu22.04
 
@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y \
 # 升级pip
 RUN pip install --upgrade pip
 
-# 安装最新版本的runpod (修复模块缺失问题)
+# 安装最新版本的runpod
 RUN pip uninstall runpod -y || true
 RUN pip install runpod>=1.6.0
 
@@ -31,7 +31,7 @@ ENV LLAMA_CUBLAS=1
 ENV CMAKE_ARGS="-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=89"
 ENV FORCE_CMAKE=1
 
-# 先安装基础依赖
+# 安装基础依赖
 COPY requirements.txt .
 RUN pip install runpod==1.7.11 requests>=2.28.0 torch>=2.0.0 transformers>=4.30.0 accelerate>=0.20.0
 
@@ -42,14 +42,12 @@ RUN CMAKE_ARGS="-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=89" FORCE_CMAKE=1 p
 # 验证CUDA支持
 RUN python -c "from llama_cpp import Llama; print('llama-cpp-python CUDA support verified for L4 GPU')"
 
+# 复制GPU-only handler
+COPY handler_gpu_only.py /workspace/handler.py
+
 # 复制测试脚本
 COPY l4_gpu_test.py .
 COPY test_load_only.py .
-COPY handler_test.py .
-COPY handler_simple.py .
-
-# 复制应用代码
-COPY . .
 
 # 设置入口点
-CMD ["python", "handler_test.py"] 
+CMD ["python", "handler.py"] 
