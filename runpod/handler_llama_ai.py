@@ -6,684 +6,355 @@ RunPod Handler with Real AI - Llama 3.2 MOE
 
 import runpod
 import os
-import sys
-import subprocess
-import json
+import logging
 import time
 import threading
-import requests
-from typing import Dict, Any, Optional
+import subprocess
+import json
+from typing import Optional, Dict, Any
 
-# 尝试导入transformers和torch用于直接模型加载
-try:
-    import torch
-    from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-    TRANSFORMERS_AVAILABLE = True
-    print("✅ Transformers and PyTorch available for direct model loading")
-except ImportError as e:
-    TRANSFORMERS_AVAILABLE = False
-    print(f"⚠️ Transformers not available: {e}")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# 尝试导入llama-cpp-python用于GGUF模型
-try:
-    from llama_cpp import Llama
-    LLAMA_CPP_AVAILABLE = True
-    print("✅ llama-cpp-python available for GGUF model loading")
-except ImportError as e:
-    LLAMA_CPP_AVAILABLE = False
-    print(f"⚠️ llama-cpp-python not available: {e}")
+# Global variables for model management
+model = None
+tokenizer = None
+model_type = None
+model_path = None
 
-def get_gpu_info():
-    """获取GPU使用情况"""
+# GPU monitoring thread
+gpu_monitor_active = False
+
+def check_gpu():
+    """Check GPU availability and CUDA support"""
     try:
-        result = subprocess.run([
-            'nvidia-smi', 
-            '--query-gpu=index,name,memory.used,memory.total,utilization.gpu,temperature.gpu,power.draw',
-            '--format=csv,noheader,nounits'
-        ], capture_output=True, text=True, timeout=5)
+        # Check nvidia-smi first
+        try:
+            result = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total', '--format=csv,noheader'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                gpu_info = result.stdout.strip().split('\n')[0].split(', ')
+                gpu_name = gpu_info[0].strip()
+                gpu_memory = float(gpu_info[1].split()[0]) / 1024  # Convert MB to GB
+                logger.info(f"nvidia-smi detected GPU: {gpu_name}, Memory: {gpu_memory:.1f}GB")
+            else:
+                logger.warning("nvidia-smi command failed")
+        except Exception as e:
+            logger.warning(f"nvidia-smi check failed: {e}")
         
-        if result.returncode == 0:
-            lines = result.stdout.strip().split('\n')
-            gpu_info = []
+        # Check PyTorch CUDA support
+        import torch
+        if torch.cuda.is_available():
+            gpu_count = torch.cuda.device_count()
+            gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
+            gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3 if gpu_count > 0 else 0
+            logger.info(f"PyTorch CUDA Available: {gpu_count} GPU(s), Name: {gpu_name}, Memory: {gpu_memory:.1f}GB")
             
-            for line in lines:
-                if line.strip():
-                    parts = [p.strip() for p in line.split(',')]
-                    if len(parts) >= 7:
-                        gpu_info.append({
-                            'index': parts[0],
-                            'name': parts[1],
-                            'memory_used_mb': parts[2],
-                            'memory_total_mb': parts[3],
-                            'utilization_percent': parts[4],
-                            'temperature_c': parts[5],
-                            'power_draw_w': parts[6]
-                        })
+            # Test GPU allocation
+            try:
+                test_tensor = torch.cuda.FloatTensor(1)
+                logger.info("GPU allocation test successful")
+                del test_tensor
+                torch.cuda.empty_cache()
+            except Exception as e:
+                logger.warning(f"GPU allocation test failed: {e}")
             
-            return gpu_info
+            return True, gpu_count, gpu_name
         else:
-            return [{'error': 'nvidia-smi command failed'}]
-            
+            logger.warning("PyTorch CUDA not available, will use CPU")
+            return False, 0, "None"
     except Exception as e:
-        return [{'error': f'GPU info error: {str(e)}'}]
-
-def log_gpu_status():
-    """记录GPU状态到日志"""
-    gpu_info = get_gpu_info()
-    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-    
-    print(f"\n=== GPU Status at {timestamp} ===")
-    for i, gpu in enumerate(gpu_info):
-        if 'error' in gpu:
-            print(f"GPU {i}: {gpu['error']}")
-        else:
-            memory_used = float(gpu['memory_used_mb']) if gpu['memory_used_mb'] != 'N/A' else 0
-            memory_total = float(gpu['memory_total_mb']) if gpu['memory_total_mb'] != 'N/A' else 1
-            memory_percent = (memory_used / memory_total * 100) if memory_total > 0 else 0
-            
-            print(f"GPU {gpu['index']} ({gpu['name']}):")
-            print(f"  Memory: {gpu['memory_used_mb']}MB / {gpu['memory_total_mb']}MB ({memory_percent:.1f}%)")
-            print(f"  Utilization: {gpu['utilization_percent']}%")
-            print(f"  Temperature: {gpu['temperature_c']}°C")
-            print(f"  Power: {gpu['power_draw_w']}W")
-    print("=" * 50)
+        logger.error(f"Error checking GPU: {e}")
+        return False, 0, "Error"
 
 def start_gpu_monitoring():
-    """启动GPU监控线程"""
-    def monitor_loop():
-        while True:
-            log_gpu_status()
+    """Start GPU monitoring in background"""
+    global gpu_monitor_active
+    gpu_monitor_active = True
+    
+    def monitor_gpu():
+        while gpu_monitor_active:
+            try:
+                result = subprocess.run(['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu', '--format=csv,noheader,nounits'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    logger.info(f"GPU Status: {result.stdout.strip()}")
+                else:
+                    logger.warning("nvidia-smi command failed")
+            except Exception as e:
+                logger.error(f"GPU monitoring error: {e}")
             time.sleep(30)
     
-    monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
+    monitor_thread = threading.Thread(target=monitor_gpu, daemon=True)
     monitor_thread.start()
-    print("🖥️ GPU监控已启动，每30秒记录一次状态")
+    logger.info("GPU monitoring started")
 
-def get_available_models():
-    """获取指定路径的模型列表"""
-    print("🔍 Checking for models in specified paths...")
-    
-    # 你指定的模型路径
+def discover_models():
+    """Discover available models in the volume"""
     model_paths = [
-        {
-            'path': '/runpod-volume/text_models/L3.2-8X3B.gguf',
-            'name': 'Llama 3.2 8X3B MOE',
-            'id': 'L3.2-8X3B',
-            'type': 'gguf'
-        },
-        {
-            'path': '/runpod-volume/text_models/L3.2-8X4B.gguf', 
-            'name': 'Llama 3.2 8X4B MOE V2',
-            'id': 'L3.2-8X4B',
-            'type': 'gguf'
-        }
+        "/runpod-volume/text_models/L3.2-8X4B.gguf",
+        "/runpod-volume/text_models/L3.2-8X3B.gguf"
     ]
     
     available_models = []
-    
-    for model_info in model_paths:
-        print(f"📍 Checking: {model_info['path']}")
-        
-        if os.path.exists(model_info['path']):
-            try:
-                size_mb = os.path.getsize(model_info['path']) / (1024 * 1024)
-                model_info['size_mb'] = size_mb
-                available_models.append(model_info)
-                print(f"  ✅ Found: {model_info['name']} ({size_mb:.1f}MB)")
-            except Exception as e:
-                print(f"  ⚠️ Error reading {model_info['name']}: {e}")
+    for path in model_paths:
+        if os.path.exists(path):
+            size = os.path.getsize(path) / (1024**3)  # Size in GB
+            available_models.append((path, size))
+            logger.info(f"Found model: {path} ({size:.1f}GB)")
         else:
-            print(f"  ❌ Not found: {model_info['name']}")
-    
-    print(f"\n📊 Available models: {len(available_models)}")
-    for i, model in enumerate(available_models):
-        print(f"  {i+1}. {model['name']} ({model['size_mb']:.1f}MB)")
+            logger.warning(f"Model not found: {path}")
     
     return available_models
 
-# 全局变量存储加载的模型
-loaded_model = None
-loaded_tokenizer = None
-model_type = None
+def load_gguf_model(model_path: str, use_gpu: bool = True):
+    """Load GGUF model using llama-cpp-python with GPU support"""
+    try:
+        from llama_cpp import Llama
+        
+        # GPU settings - force GPU usage if available
+        if use_gpu:
+            n_gpu_layers = 35  # Use most layers on GPU (32 transformer layers + embeddings)
+        else:
+            n_gpu_layers = 0
+        
+        logger.info(f"Loading GGUF model from {model_path}")
+        logger.info(f"GPU layers: {n_gpu_layers}, Use GPU: {use_gpu}")
+        
+        # Optimized parameters for GPU inference
+        model = Llama(
+            model_path=model_path,
+            n_ctx=2048,  # Reduced context for faster loading
+            n_batch=256,  # Smaller batch for memory efficiency
+            n_gpu_layers=n_gpu_layers,  # Use GPU layers
+            verbose=True,
+            n_threads=2,  # Fewer CPU threads when using GPU
+            use_mmap=True,  # Memory mapping for efficiency
+            use_mlock=False,  # Don't lock memory
+            f16_kv=True,  # Use half precision for key-value cache
+            logits_all=False,  # Only compute logits for last token
+            vocab_only=False,  # Load full model
+            rope_scaling_type=-1,  # Default rope scaling
+            rope_freq_base=0.0,  # Use model default
+            rope_freq_scale=0.0,  # Use model default
+        )
+        
+        logger.info("GGUF model loaded successfully with GPU acceleration")
+        return model, "gguf"
+        
+    except Exception as e:
+        logger.error(f"Failed to load GGUF model: {e}")
+        # Try fallback with fewer GPU layers
+        if use_gpu and n_gpu_layers > 0:
+            logger.info("Retrying with fewer GPU layers...")
+            try:
+                model = Llama(
+                    model_path=model_path,
+                    n_ctx=2048,
+                    n_batch=256,
+                    n_gpu_layers=20,  # Fewer GPU layers
+                    verbose=True,
+                    n_threads=2,
+                    use_mmap=True,
+                    use_mlock=False,
+                    f16_kv=True,
+                )
+                logger.info("GGUF model loaded with reduced GPU layers")
+                return model, "gguf"
+            except Exception as e2:
+                logger.error(f"Fallback also failed: {e2}")
+        
+        return None, None
 
-# AI系统设定模版
-SYSTEM_TEMPLATES = {
-    "default": """You are a helpful, intelligent AI assistant. You provide accurate, thoughtful, and detailed responses to user questions. You are knowledgeable across many topics and can engage in meaningful conversations.""",
-    
-    "creative": """You are a creative AI assistant with exceptional storytelling abilities. You excel at creative writing, fiction, roleplay, and imaginative scenarios. You write with vivid prose, engaging dialogue, and compelling narratives. You can adapt to any genre or style requested.""",
-    
-    "professional": """You are a professional AI assistant focused on providing clear, accurate, and well-structured responses. You maintain a formal tone while being helpful and informative. You excel at analysis, problem-solving, and providing detailed explanations.""",
-    
-    "casual": """You are a friendly, casual AI assistant. You communicate in a relaxed, conversational tone while still being helpful and informative. You can engage in both serious discussions and light-hearted conversations.""",
-    
-    "technical": """You are a technical AI assistant with deep expertise in programming, technology, and engineering. You provide precise, detailed technical explanations and can help with coding, system design, and troubleshooting.""",
-    
-    "chinese": """你是一个智能的中文AI助手。你能够用流利的中文进行对话，理解中文文化背景，并提供准确、有用的回答。你既可以进行正式的讨论，也可以进行轻松的聊天。"""
-}
+def load_transformers_model(model_path: str, use_gpu: bool = True):
+    """Load model using transformers library with GPU support"""
+    try:
+        import torch
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        
+        device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
+        logger.info(f"Loading Transformers model from {model_path} on {device}")
+        
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+            device_map="auto" if device == "cuda" else None,
+            trust_remote_code=True
+        )
+        
+        if device == "cpu":
+            model = model.to(device)
+            
+        logger.info(f"Transformers model loaded successfully on {device}")
+        return model, tokenizer, "transformers"
+        
+    except Exception as e:
+        logger.error(f"Failed to load Transformers model: {e}")
+        return None, None, None
 
-def format_llama3_prompt(system_prompt: str, user_message: str, conversation_history: list = None) -> str:
-    """
-    格式化Llama 3.2的对话模版
+def initialize_model():
+    """Initialize the best available model with GPU support"""
+    global model, tokenizer, model_type, model_path
     
-    Args:
-        system_prompt: 系统提示
-        user_message: 用户消息
-        conversation_history: 对话历史 [{"role": "user/assistant", "content": "..."}]
+    # Check GPU availability
+    gpu_available, gpu_count, gpu_name = check_gpu()
+    logger.info(f"GPU Status: Available={gpu_available}, Count={gpu_count}, Name={gpu_name}")
     
-    Returns:
-        格式化的prompt字符串
-    """
+    # Start GPU monitoring
+    start_gpu_monitoring()
     
-    # Llama 3.2 使用的对话格式
-    formatted_prompt = f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
+    # Discover available models
+    available_models = discover_models()
     
-    # 添加对话历史
-    if conversation_history:
-        for msg in conversation_history:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            formatted_prompt += f"<|start_header_id|>{role}<|end_header_id|>\n\n{content}<|eot_id|>"
+    if not available_models:
+        logger.error("No models found in the specified paths")
+        return False
     
-    # 添加当前用户消息
-    formatted_prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{user_message}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+    # Try to load the best model (prefer 8X4B over 8X3B)
+    for model_path_candidate, size in available_models:
+        logger.info(f"Attempting to load model: {model_path_candidate} ({size:.1f}GB)")
+        
+        # Try GGUF first (more efficient)
+        if model_path_candidate.endswith('.gguf'):
+            loaded_model, loaded_type = load_gguf_model(model_path_candidate, gpu_available)
+            if loaded_model:
+                model = loaded_model
+                model_type = loaded_type
+                model_path = model_path_candidate
+                logger.info(f"Successfully loaded GGUF model: {model_path}")
+                return True
+        
+        # Try Transformers as fallback
+        loaded_model, loaded_tokenizer, loaded_type = load_transformers_model(model_path_candidate, gpu_available)
+        if loaded_model:
+            model = loaded_model
+            tokenizer = loaded_tokenizer
+            model_type = loaded_type
+            model_path = model_path_candidate
+            logger.info(f"Successfully loaded Transformers model: {model_path}")
+            return True
     
+    logger.error("Failed to load any model")
+    return False
+
+def get_personality_prompt(personality: str) -> str:
+    """Get system prompt for different AI personalities"""
+    personalities = {
+        "default": "You are a helpful AI assistant. Provide clear, accurate, and helpful responses.",
+        "creative": "You are a creative AI assistant specializing in storytelling, creative writing, and imaginative content. Be expressive and innovative in your responses.",
+        "professional": "You are a professional AI assistant. Provide formal, structured, and business-appropriate responses with clear reasoning.",
+        "casual": "You are a friendly and casual AI assistant. Use a relaxed, conversational tone while being helpful and approachable.",
+        "technical": "You are a technical AI assistant specializing in programming, technology, and engineering topics. Provide detailed technical explanations and code examples when relevant.",
+        "chinese": "你是一个中文AI助手。请用中文回答问题，提供准确、有用的信息。"
+    }
+    return personalities.get(personality, personalities["default"])
+
+def format_llama_prompt(prompt: str, personality: str = "default") -> str:
+    """Format prompt for Llama 3.2 model"""
+    system_prompt = get_personality_prompt(personality)
+    
+    formatted_prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+{system_prompt}<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+"""
     return formatted_prompt
 
-def load_model(model_info):
-    """加载指定的模型"""
-    global loaded_model, loaded_tokenizer, model_type
+def generate_response(prompt: str, personality: str = "default") -> str:
+    """Generate response using the loaded model"""
+    global model, tokenizer, model_type
     
-    print(f"🚀 Loading model: {model_info['name']}")
-    print(f"📍 Path: {model_info['path']}")
-    print(f"📏 Size: {model_info['size_mb']:.1f}MB")
-    print(f"🔧 Type: {model_info['type']}")
+    if not model:
+        return "Error: Model not loaded"
     
     try:
-        if model_info['type'] == 'gguf' and LLAMA_CPP_AVAILABLE:
-            print("🦙 Loading GGUF model with llama-cpp-python...")
-            
-            # 检测GPU
-            gpu_count = torch.cuda.device_count() if 'torch' in globals() else 0
-            print(f"🖥️ Detected {gpu_count} GPU(s)")
-            
-            loaded_model = Llama(
-                model_path=model_info['path'],
-                n_ctx=4096,  # 上下文长度
-                n_gpu_layers=-1 if gpu_count > 0 else 0,  # 使用GPU层数
-                verbose=True
-            )
-            model_type = 'gguf'
-            print("✅ GGUF model loaded successfully")
-            return True
-            
-        elif model_info['type'] == 'transformers' and TRANSFORMERS_AVAILABLE:
-            print("🤗 Loading Transformers model...")
-            
-            # 检测GPU
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            print(f"🖥️ Using device: {device}")
-            
-            # 加载tokenizer
-            print("📝 Loading tokenizer...")
-            loaded_tokenizer = AutoTokenizer.from_pretrained(
-                model_info['path'],
-                trust_remote_code=True
-            )
-            
-            # 加载模型
-            print("🧠 Loading model...")
-            loaded_model = AutoModelForCausalLM.from_pretrained(
-                model_info['path'],
-                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-                device_map="auto" if device == "cuda" else None,
-                trust_remote_code=True
-            )
-            
-            if device == "cpu":
-                loaded_model = loaded_model.to(device)
-                
-            model_type = 'transformers'
-            print("✅ Transformers model loaded successfully")
-            return True
-            
-        else:
-            print(f"❌ Cannot load {model_info['type']} model - required libraries not available")
-            return False
-            
-    except Exception as e:
-        print(f"💥 Error loading model: {str(e)}")
-        loaded_model = None
-        loaded_tokenizer = None
-        model_type = None
-        return False
-
-def generate_with_loaded_model(prompt: str, max_tokens: int = 1000, temperature: float = 0.7) -> str:
-    """使用已加载的模型生成回复"""
-    global loaded_model, loaded_tokenizer, model_type
-    
-    if loaded_model is None:
-        return "MODEL_NOT_LOADED"
-    
-    try:
-        if model_type == 'gguf':
-            print("🦙 Generating with GGUF model...")
-            
-            response = loaded_model(
-                prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
+        formatted_prompt = format_llama_prompt(prompt, personality)
+        logger.info(f"Generating response with {model_type} model, personality: {personality}")
+        
+        if model_type == "gguf":
+            # Use llama-cpp-python
+            response = model(
+                formatted_prompt,
+                max_tokens=512,
+                temperature=0.7,
                 top_p=0.9,
-                top_k=40,
-                repeat_penalty=1.1,
+                echo=False,
                 stop=["<|eot_id|>", "<|end_of_text|>"]
             )
-            
             return response['choices'][0]['text'].strip()
             
-        elif model_type == 'transformers':
-            print("🤗 Generating with Transformers model...")
+        elif model_type == "transformers":
+            # Use transformers
+            import torch
             
-            # 编码输入
-            inputs = loaded_tokenizer.encode(prompt, return_tensors="pt")
+            inputs = tokenizer.encode(formatted_prompt, return_tensors="pt")
             if torch.cuda.is_available():
                 inputs = inputs.to("cuda")
             
-            # 生成
             with torch.no_grad():
-                outputs = loaded_model.generate(
+                outputs = model.generate(
                     inputs,
-                    max_new_tokens=max_tokens,
-                    temperature=temperature,
+                    max_new_tokens=512,
+                    temperature=0.7,
                     top_p=0.9,
-                    top_k=40,
                     do_sample=True,
-                    pad_token_id=loaded_tokenizer.eos_token_id,
-                    eos_token_id=loaded_tokenizer.eos_token_id
+                    pad_token_id=tokenizer.eos_token_id
                 )
             
-            # 解码输出
-            response = loaded_tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
+            response = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
             return response.strip()
-            
+        
         else:
-            return "UNKNOWN_MODEL_TYPE"
+            return "Error: Unknown model type"
             
     except Exception as e:
-        print(f"💥 Error generating with model: {str(e)}")
-        return f"GENERATION_ERROR: {str(e)}"
+        logger.error(f"Error generating response: {e}")
+        return f"Error generating response: {str(e)}"
 
-def call_local_llm(prompt: str, max_tokens: int = 1000, temperature: float = 0.7) -> str:
-    """
-    调用本地LLM API (假设使用llama.cpp server或类似服务)
-    
-    Args:
-        prompt: 格式化的prompt
-        max_tokens: 最大token数
-        temperature: 温度参数
-    
-    Returns:
-        AI生成的回复
-    """
-    
-    # 可能的LLM服务端点列表
-    llm_endpoints = [
-        {
-            "name": "llama.cpp server",
-            "url": "http://localhost:8080/completion",
-            "format": "llamacpp"
-        },
-        {
-            "name": "text-generation-webui",
-            "url": "http://localhost:5000/api/v1/generate",
-            "format": "textgen"
-        },
-        {
-            "name": "vLLM server",
-            "url": "http://localhost:8000/v1/completions",
-            "format": "openai"
-        },
-        {
-            "name": "Ollama",
-            "url": "http://localhost:11434/api/generate",
-            "format": "ollama"
-        }
-    ]
-    
-    # 首先尝试使用已加载的模型
-    if loaded_model is not None:
-        print(f"🎯 Using pre-loaded model ({model_type})")
-        result = generate_with_loaded_model(prompt, max_tokens, temperature)
-        if result not in ["MODEL_NOT_LOADED", "UNKNOWN_MODEL_TYPE"] and not result.startswith("GENERATION_ERROR"):
-            return result
-        else:
-            print(f"⚠️ Pre-loaded model failed: {result}")
-    
-    print(f"🔍 Attempting to connect to local LLM services...")
-    
-    for endpoint in llm_endpoints:
-        try:
-            print(f"📡 Trying {endpoint['name']} at {endpoint['url']}")
-            
-            # 根据不同服务格式化请求
-            if endpoint['format'] == 'llamacpp':
-                payload = {
-                    "prompt": prompt,
-                    "n_predict": max_tokens,
-                    "temperature": temperature,
-                    "top_p": 0.9,
-                    "top_k": 40,
-                    "repeat_penalty": 1.1,
-                    "stop": ["<|eot_id|>", "<|end_of_text|>"]
-                }
-            elif endpoint['format'] == 'textgen':
-                payload = {
-                    "prompt": prompt,
-                    "max_new_tokens": max_tokens,
-                    "temperature": temperature,
-                    "top_p": 0.9,
-                    "top_k": 40,
-                    "repetition_penalty": 1.1,
-                    "stopping_strings": ["<|eot_id|>", "<|end_of_text|>"]
-                }
-            elif endpoint['format'] == 'openai':
-                payload = {
-                    "model": "llama-3.2-8x3b-moe",
-                    "prompt": prompt,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                    "top_p": 0.9,
-                    "stop": ["<|eot_id|>", "<|end_of_text|>"]
-                }
-            elif endpoint['format'] == 'ollama':
-                payload = {
-                    "model": "llama3.2",
-                    "prompt": prompt,
-                    "options": {
-                        "num_predict": max_tokens,
-                        "temperature": temperature,
-                        "top_p": 0.9,
-                        "top_k": 40,
-                        "repeat_penalty": 1.1
-                    },
-                    "stream": False
-                }
-            
-            print(f"📤 Sending request to {endpoint['name']} with payload size: {len(str(payload))} bytes")
-            
-            # 发送请求
-            response = requests.post(endpoint['url'], json=payload, timeout=10)
-            
-            print(f"📥 Response from {endpoint['name']}: Status {response.status_code}")
-            
-            if response.status_code == 200:
-                result = response.json()
-                print(f"✅ Successfully connected to {endpoint['name']}")
-                print(f"📊 Response keys: {list(result.keys())}")
-                
-                # 根据不同服务解析响应
-                if endpoint['format'] == 'llamacpp':
-                    content = result.get("content", "").strip()
-                elif endpoint['format'] == 'textgen':
-                    content = result.get("results", [{}])[0].get("text", "").strip()
-                elif endpoint['format'] == 'openai':
-                    content = result.get("choices", [{}])[0].get("text", "").strip()
-                elif endpoint['format'] == 'ollama':
-                    content = result.get("response", "").strip()
-                else:
-                    content = str(result)
-                
-                if content:
-                    print(f"🎯 Generated content length: {len(content)} characters")
-                    return content
-                else:
-                    print(f"⚠️ Empty response from {endpoint['name']}")
-            else:
-                print(f"❌ HTTP Error {response.status_code} from {endpoint['name']}: {response.text[:200]}")
-                
-        except requests.exceptions.ConnectionError as e:
-            print(f"🔌 Connection failed to {endpoint['name']}: Service not running")
-        except requests.exceptions.Timeout as e:
-            print(f"⏰ Timeout connecting to {endpoint['name']}: {str(e)}")
-        except requests.exceptions.RequestException as e:
-            print(f"🌐 Request error to {endpoint['name']}: {str(e)}")
-        except Exception as e:
-            print(f"💥 Unexpected error with {endpoint['name']}: {str(e)}")
-    
-    print(f"❌ All LLM services unavailable. Checked {len(llm_endpoints)} endpoints.")
-    return "LLM_SERVICE_UNAVAILABLE"
-
-def simulate_ai_response(prompt: str, system_template: str = "default") -> str:
-    """
-    模拟AI回复（当没有真实LLM服务时使用）
-    """
-    
-    # 基于prompt内容生成不同类型的回复
-    prompt_lower = prompt.lower()
-    
-    if "hello" in prompt_lower or "hi" in prompt_lower or "你好" in prompt_lower:
-        return "Hello! I'm your AI assistant. How can I help you today?"
-    
-    elif "story" in prompt_lower or "creative" in prompt_lower:
-        return """Once upon a time, in a world where technology and magic coexisted, there lived a young programmer who discovered that their code could bend reality itself. Each line they wrote didn't just execute on computers, but manifested in the physical world around them.
-
-One day, while debugging a particularly stubborn algorithm, they accidentally created a small portal in their bedroom wall. Through it, they could see another dimension where their digital creations lived as sentient beings..."""
-    
-    elif "code" in prompt_lower or "programming" in prompt_lower:
-        return """Here's a simple example of how you might approach this problem:
-
-```python
-def solve_problem(input_data):
-    # Process the input
-    result = []
-    for item in input_data:
-        # Apply your logic here
-        processed_item = transform(item)
-        result.append(processed_item)
-    
-    return result
-```
-
-Would you like me to explain any specific part or help you adapt this to your particular use case?"""
-    
-    elif "中文" in prompt or "chinese" in prompt_lower:
-        return "你好！我是你的AI助手。我可以用中文和你对话，帮助你解决各种问题。有什么我可以帮助你的吗？"
-    
-    else:
-        return f"""I understand you're asking about: "{prompt}"
-
-Based on your question, here are some key points to consider:
-
-1. **Context**: This appears to be related to [relevant topic area]
-2. **Approach**: I'd recommend starting with [suggested approach]
-3. **Considerations**: Keep in mind [important factors]
-
-Would you like me to elaborate on any of these points or help you with a more specific aspect of your question?"""
-
-def handler(job):
-    """
-    RunPod serverless handler function with real AI
-    
-    Args:
-        job (dict): Job data containing 'input' and 'id'
-        
-    Returns:
-        str: AI generated response
-    """
+def handler(event):
+    """Main handler function for RunPod"""
     try:
-        job_input = job.get("input", {})
-        job_id = job.get("id", "unknown")
+        # Get input data
+        input_data = event.get("input", {})
+        prompt = input_data.get("prompt", "Hello")
+        personality = input_data.get("personality", "default")
         
-        print(f"\n🚀 AI Job {job_id} started")
-        log_gpu_status()
+        logger.info(f"Processing request - Prompt: {prompt[:50]}..., Personality: {personality}")
         
-        # 获取输入参数
-        prompt = job_input.get("prompt", "Hello!")
-        system_template = job_input.get("system_template", "default")
-        conversation_history = job_input.get("history", [])
-        max_tokens = job_input.get("max_tokens", 1000)
-        temperature = job_input.get("temperature", 0.7)
+        # Initialize model if not already loaded
+        if not model:
+            logger.info("Model not loaded, initializing...")
+            if not initialize_model():
+                return {"error": "Failed to initialize model"}
         
-        print(f"📝 Processing prompt: '{prompt[:100]}{'...' if len(prompt) > 100 else ''}'")
-        print(f"🎭 Using system template: {system_template}")
+        # Generate response
+        start_time = time.time()
+        response = generate_response(prompt, personality)
+        end_time = time.time()
         
-        # 获取系统提示
-        system_prompt = SYSTEM_TEMPLATES.get(system_template, SYSTEM_TEMPLATES["default"])
+        logger.info(f"Response generated in {end_time - start_time:.2f} seconds")
         
-        # 格式化prompt
-        formatted_prompt = format_llama3_prompt(system_prompt, prompt, conversation_history)
-        
-        print(f"🔧 Formatted prompt length: {len(formatted_prompt)} characters")
-        
-        # 尝试调用真实LLM，如果失败则使用模拟回复
-        print(f"🤖 Attempting to load and use local LLM model...")
-        print(f"🎯 Target model: Llama 3.2 8X3B MOE Dark Champion")
-        print(f"📍 Expected model path: /models/ or similar")
-        print(f"🔧 Formatted prompt preview: {formatted_prompt[:200]}...")
-        
-        try:
-            ai_response = call_local_llm(formatted_prompt, max_tokens, temperature)
-            
-            # 检查是否成功获得LLM响应
-            if ai_response == "LLM_SERVICE_UNAVAILABLE":
-                print(f"❌ No local LLM service found - all endpoints failed")
-                print(f"💡 To use real AI, you need to:")
-                print(f"   1. Install and run llama.cpp server on port 8080")
-                print(f"   2. Or install text-generation-webui on port 5000")
-                print(f"   3. Or install vLLM server on port 8000")
-                print(f"   4. Or install Ollama on port 11434")
-                print(f"🔄 Falling back to simulated AI response")
-                ai_response = simulate_ai_response(prompt, system_template)
-            elif "Error:" in ai_response or "Connection Error:" in ai_response:
-                print(f"⚠️ LLM service error: {ai_response}")
-                print(f"🔄 Falling back to simulated AI response")
-                ai_response = simulate_ai_response(prompt, system_template)
-            else:
-                print(f"✅ Successfully generated response using local LLM")
-                print(f"📏 Response length: {len(ai_response)} characters")
-                
-        except Exception as e:
-            print(f"💥 Unexpected error during LLM call: {str(e)}")
-            print(f"🔄 Falling back to simulated AI response")
-            ai_response = simulate_ai_response(prompt, system_template)
-        
-        print(f"✅ Generated response: '{ai_response[:100]}{'...' if len(ai_response) > 100 else ''}'")
-        log_gpu_status()
-        print(f"🎉 AI Job {job_id} completed\n")
-        
-        return ai_response
+        return {
+            "output": response,
+            "model_info": {
+                "model_path": model_path,
+                "model_type": model_type,
+                "processing_time": round(end_time - start_time, 2)
+            }
+        }
         
     except Exception as e:
-        error_msg = f"Handler error: {str(e)}"
-        print(f"❌ ERROR: {error_msg}")
-        log_gpu_status()
-        return f"I apologize, but I encountered an error while processing your request: {error_msg}"
+        logger.error(f"Handler error: {e}")
+        return {"error": f"Handler error: {str(e)}"}
 
-def check_llm_services():
-    """检查可用的LLM服务"""
-    print("\n🔍 Checking for available LLM services...")
-    
-    services = [
-        ("llama.cpp server", "http://localhost:8080/health"),
-        ("text-generation-webui", "http://localhost:5000/api/v1/model"),
-        ("vLLM server", "http://localhost:8000/health"),
-        ("Ollama", "http://localhost:11434/api/tags")
-    ]
-    
-    available_services = []
-    
-    for service_name, health_url in services:
-        try:
-            response = requests.get(health_url, timeout=2)
-            if response.status_code == 200:
-                print(f"✅ {service_name} is running and accessible")
-                available_services.append(service_name)
-            else:
-                print(f"⚠️ {service_name} responded with status {response.status_code}")
-        except requests.exceptions.ConnectionError:
-            print(f"❌ {service_name} is not running (connection refused)")
-        except requests.exceptions.Timeout:
-            print(f"⏰ {service_name} timeout (may be starting up)")
-        except Exception as e:
-            print(f"💥 {service_name} check failed: {str(e)}")
-    
-    if available_services:
-        print(f"🎉 Found {len(available_services)} available LLM service(s): {', '.join(available_services)}")
-    else:
-        print("⚠️ No LLM services detected - will use simulated responses")
-        print("💡 To enable real AI responses, install one of:")
-        print("   • llama.cpp with server mode")
-        print("   • text-generation-webui")
-        print("   • vLLM")
-        print("   • Ollama")
-    
-    return available_services
+# Initialize model on startup
+logger.info("Starting model initialization...")
+if not initialize_model():
+    logger.error("Failed to initialize model on startup")
 
-# 启动RunPod serverless
-if __name__ == "__main__":
-    print("=== RunPod AI Handler Starting ===")
-    print(f"Python version: {sys.version}")
-    print(f"RunPod version: {getattr(runpod, '__version__', 'unknown')}")
-    
-    # 显示可用的系统模版
-    print("\n🎭 Available System Templates:")
-    for template_name, template_desc in SYSTEM_TEMPLATES.items():
-        print(f"  - {template_name}: {template_desc[:80]}{'...' if len(template_desc) > 80 else ''}")
-    
-    # 查找并尝试加载指定的模型
-    print("\n" + "="*50)
-    available_models = get_available_models()
-    
-    if available_models:
-        print(f"\n🎯 Attempting to load the first available model...")
-        # 优先加载8X4B模型（如果存在），否则加载8X3B
-        target_model = None
-        
-        # 查找8X4B模型
-        for model in available_models:
-            if model['id'] == 'L3.2-8X4B':
-                target_model = model
-                print(f"🎯 Selected: {model['name']} (preferred 8X4B version)")
-                break
-        
-        # 如果没有8X4B，使用8X3B
-        if not target_model:
-            for model in available_models:
-                if model['id'] == 'L3.2-8X3B':
-                    target_model = model
-                    print(f"🎯 Selected: {model['name']} (8X3B version)")
-                    break
-        
-        # 如果还没有，使用第一个可用的
-        if not target_model:
-            target_model = available_models[0]
-            print(f"🎯 Selected: {target_model['name']} (first available)")
-        
-        if load_model(target_model):
-            print(f"🎉 Successfully loaded model: {target_model['name']}")
-            handler_mode = f"Direct Model Loading ({target_model['name']})"
-        else:
-            print(f"❌ Failed to load model, checking LLM services...")
-            # 检查LLM服务作为备选
-            available_llm_services = check_llm_services()
-            handler_mode = f"LLM Services ({len(available_llm_services)} available)" if available_llm_services else "Simulated AI"
-    else:
-        print(f"❌ No models found at specified paths:")
-        print(f"   - /runpod-volume/text_models/L3.2-8X3B.gguf")
-        print(f"   - /runpod-volume/text_models/L3.2-8X4B.gguf")
-        print(f"💡 Please ensure models are uploaded to the correct paths")
-        print(f"🔄 Checking LLM services as fallback...")
-        # 检查LLM服务
-        available_llm_services = check_llm_services()
-        handler_mode = f"LLM Services ({len(available_llm_services)} available)" if available_llm_services else "Simulated AI"
-    
-    start_gpu_monitoring()
-    
-    print("\n🔍 Initial GPU Status:")
-    log_gpu_status()
-    
-    print(f"\n🚀 Starting RunPod AI serverless...")
-    print(f"🔧 Handler Mode: {handler_mode}")
-    print(f"🎯 Model Status: {'Loaded' if loaded_model else 'Not Loaded'}")
-    print("="*50)
-    
-    runpod.serverless.start({"handler": handler}) 
+# Start the RunPod serverless handler
+runpod.serverless.start({"handler": handler})
