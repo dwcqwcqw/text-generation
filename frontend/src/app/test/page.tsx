@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 export default function TestPage() {
   const [testResult, setTestResult] = useState('')
   const [loading, setLoading] = useState(false)
-  const [apiKey, setApiKey] = useState('')
+  const [apiKey, setApiKey] = useState('rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb')
   const [endpoint, setEndpoint] = useState('https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync')
   const [endpointId, setEndpointId] = useState('4cx6jtjdx6hdhr')
   const [prompt, setPrompt] = useState('Hello, how are you today?')
@@ -38,14 +38,7 @@ export default function TestPage() {
 
       const requestPayload = {
         input: {
-          model_path: "/runpod-volume/text_models/L3.2-8X3B.gguf",
-          prompt: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful, harmless, and honest assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`,
-          max_tokens: 150,
-          temperature: 0.7,
-          top_p: 0.9,
-          repeat_penalty: 1.05,
-          stop: ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>"],
-          stream: false
+          prompt: prompt
         }
       }
 
@@ -76,9 +69,8 @@ export default function TestPage() {
       }
 
       if (response.ok) {
-        if (data.status === "COMPLETED" && data.output?.text) {
-          const aiResponse = data.output.text.replace(requestPayload.input.prompt, "").trim()
-          setTestResult(`✅ Success!\n\nStatus: ${data.status}\nResponse: ${aiResponse}\n\nFull Response: ${JSON.stringify(data, null, 2)}`)
+        if (data.status === "success" && data.output) {
+          setTestResult(`✅ Success!\n\nStatus: ${data.status}\nResponse: ${data.output}\n\nFull Response: ${JSON.stringify(data, null, 2)}`)
         } else {
           setTestResult(`⚠️ Unexpected Response Format:\n${JSON.stringify(data, null, 2)}`)
         }
