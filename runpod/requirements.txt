@@ -1,3 +1,7 @@
 # RunPod Requirements - 使用最新版本，确保兼容性
 runpod==1.7.11
-requests>=2.28.0 
+requests>=2.28.0
+torch>=2.0.0
+transformers>=4.30.0
+accelerate>=0.20.0
+llama-cpp-python>=0.2.0 

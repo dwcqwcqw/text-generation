@@ -14,6 +14,25 @@ import threading
 import requests
 from typing import Dict, Any, Optional
 
+# 尝试导入transformers和torch用于直接模型加载
+try:
+    import torch
+    from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+    TRANSFORMERS_AVAILABLE = True
+    print("✅ Transformers and PyTorch available for direct model loading")
+except ImportError as e:
+    TRANSFORMERS_AVAILABLE = False
+    print(f"⚠️ Transformers not available: {e}")
+
+# 尝试导入llama-cpp-python用于GGUF模型
+try:
+    from llama_cpp import Llama
+    LLAMA_CPP_AVAILABLE = True
+    print("✅ llama-cpp-python available for GGUF model loading")
+except ImportError as e:
+    LLAMA_CPP_AVAILABLE = False
+    print(f"⚠️ llama-cpp-python not available: {e}")
+
 def get_gpu_info():
     """获取GPU使用情况"""
     try:
@@ -80,6 +99,90 @@ def start_gpu_monitoring():
     monitor_thread.start()
     print("🖥️ GPU监控已启动，每30秒记录一次状态")
 
+def find_model_files():
+    """在常见路径中查找模型文件"""
+    print("🔍 Searching for model files in volume...")
+    
+    # 常见的模型存储路径
+    search_paths = [
+        "/runpod-volume",
+        "/workspace", 
+        "/models",
+        "/app/models",
+        "/data",
+        "/storage",
+        ".",
+        os.path.expanduser("~")
+    ]
+    
+    model_files = []
+    
+    for base_path in search_paths:
+        if os.path.exists(base_path):
+            print(f"📁 Checking {base_path}...")
+            try:
+                for root, dirs, files in os.walk(base_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        file_lower = file.lower()
+                        
+                        # 查找模型文件
+                        if (file_lower.endswith('.gguf') or 
+                            file_lower.endswith('.bin') or
+                            file_lower.endswith('.safetensors') or
+                            'pytorch_model' in file_lower or
+                            'model.safetensors' in file_lower):
+                            
+                            size_mb = os.path.getsize(file_path) / (1024 * 1024)
+                            model_files.append({
+                                'path': file_path,
+                                'name': file,
+                                'size_mb': size_mb,
+                                'type': 'gguf' if file_lower.endswith('.gguf') else 'transformers'
+                            })
+                            print(f"  📄 Found: {file} ({size_mb:.1f}MB)")
+                            
+                        # 查找模型目录（包含config.json的目录）
+                        if file == 'config.json':
+                            model_dir = root
+                            try:
+                                with open(file_path, 'r') as f:
+                                    config = json.load(f)
+                                    if 'model_type' in config:
+                                        model_files.append({
+                                            'path': model_dir,
+                                            'name': os.path.basename(model_dir),
+                                            'size_mb': sum(os.path.getsize(os.path.join(model_dir, f)) 
+                                                         for f in os.listdir(model_dir) 
+                                                         if os.path.isfile(os.path.join(model_dir, f))) / (1024 * 1024),
+                                            'type': 'transformers',
+                                            'model_type': config.get('model_type', 'unknown')
+                                        })
+                                        print(f"  📁 Found model dir: {os.path.basename(model_dir)} ({config.get('model_type', 'unknown')})")
+                            except:
+                                pass
+                                
+            except PermissionError:
+                print(f"  ❌ Permission denied accessing {base_path}")
+            except Exception as e:
+                print(f"  ⚠️ Error scanning {base_path}: {e}")
+        else:
+            print(f"  ❌ Path {base_path} does not exist")
+    
+    # 按大小排序，大模型优先
+    model_files.sort(key=lambda x: x['size_mb'], reverse=True)
+    
+    print(f"\n📊 Found {len(model_files)} potential model files:")
+    for i, model in enumerate(model_files[:10]):  # 只显示前10个
+        print(f"  {i+1}. {model['name']} ({model['size_mb']:.1f}MB, {model['type']})")
+    
+    return model_files
+
+# 全局变量存储加载的模型
+loaded_model = None
+loaded_tokenizer = None
+model_type = None
+
 # AI系统设定模版
 SYSTEM_TEMPLATES = {
     "default": """You are a helpful, intelligent AI assistant. You provide accurate, thoughtful, and detailed responses to user questions. You are knowledgeable across many topics and can engage in meaningful conversations.""",
@@ -123,6 +226,129 @@ def format_llama3_prompt(system_prompt: str, user_message: str, conversation_his
     
     return formatted_prompt
 
+def load_model(model_info):
+    """加载指定的模型"""
+    global loaded_model, loaded_tokenizer, model_type
+    
+    print(f"🚀 Loading model: {model_info['name']}")
+    print(f"📍 Path: {model_info['path']}")
+    print(f"📏 Size: {model_info['size_mb']:.1f}MB")
+    print(f"🔧 Type: {model_info['type']}")
+    
+    try:
+        if model_info['type'] == 'gguf' and LLAMA_CPP_AVAILABLE:
+            print("🦙 Loading GGUF model with llama-cpp-python...")
+            
+            # 检测GPU
+            gpu_count = torch.cuda.device_count() if 'torch' in globals() else 0
+            print(f"🖥️ Detected {gpu_count} GPU(s)")
+            
+            loaded_model = Llama(
+                model_path=model_info['path'],
+                n_ctx=4096,  # 上下文长度
+                n_gpu_layers=-1 if gpu_count > 0 else 0,  # 使用GPU层数
+                verbose=True
+            )
+            model_type = 'gguf'
+            print("✅ GGUF model loaded successfully")
+            return True
+            
+        elif model_info['type'] == 'transformers' and TRANSFORMERS_AVAILABLE:
+            print("🤗 Loading Transformers model...")
+            
+            # 检测GPU
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"🖥️ Using device: {device}")
+            
+            # 加载tokenizer
+            print("📝 Loading tokenizer...")
+            loaded_tokenizer = AutoTokenizer.from_pretrained(
+                model_info['path'],
+                trust_remote_code=True
+            )
+            
+            # 加载模型
+            print("🧠 Loading model...")
+            loaded_model = AutoModelForCausalLM.from_pretrained(
+                model_info['path'],
+                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+                device_map="auto" if device == "cuda" else None,
+                trust_remote_code=True
+            )
+            
+            if device == "cpu":
+                loaded_model = loaded_model.to(device)
+                
+            model_type = 'transformers'
+            print("✅ Transformers model loaded successfully")
+            return True
+            
+        else:
+            print(f"❌ Cannot load {model_info['type']} model - required libraries not available")
+            return False
+            
+    except Exception as e:
+        print(f"💥 Error loading model: {str(e)}")
+        loaded_model = None
+        loaded_tokenizer = None
+        model_type = None
+        return False
+
+def generate_with_loaded_model(prompt: str, max_tokens: int = 1000, temperature: float = 0.7) -> str:
+    """使用已加载的模型生成回复"""
+    global loaded_model, loaded_tokenizer, model_type
+    
+    if loaded_model is None:
+        return "MODEL_NOT_LOADED"
+    
+    try:
+        if model_type == 'gguf':
+            print("🦙 Generating with GGUF model...")
+            
+            response = loaded_model(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=0.9,
+                top_k=40,
+                repeat_penalty=1.1,
+                stop=["<|eot_id|>", "<|end_of_text|>"]
+            )
+            
+            return response['choices'][0]['text'].strip()
+            
+        elif model_type == 'transformers':
+            print("🤗 Generating with Transformers model...")
+            
+            # 编码输入
+            inputs = loaded_tokenizer.encode(prompt, return_tensors="pt")
+            if torch.cuda.is_available():
+                inputs = inputs.to("cuda")
+            
+            # 生成
+            with torch.no_grad():
+                outputs = loaded_model.generate(
+                    inputs,
+                    max_new_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=0.9,
+                    top_k=40,
+                    do_sample=True,
+                    pad_token_id=loaded_tokenizer.eos_token_id,
+                    eos_token_id=loaded_tokenizer.eos_token_id
+                )
+            
+            # 解码输出
+            response = loaded_tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
+            return response.strip()
+            
+        else:
+            return "UNKNOWN_MODEL_TYPE"
+            
+    except Exception as e:
+        print(f"💥 Error generating with model: {str(e)}")
+        return f"GENERATION_ERROR: {str(e)}"
+
 def call_local_llm(prompt: str, max_tokens: int = 1000, temperature: float = 0.7) -> str:
     """
     调用本地LLM API (假设使用llama.cpp server或类似服务)
@@ -159,6 +385,15 @@ def call_local_llm(prompt: str, max_tokens: int = 1000, temperature: float = 0.7
             "format": "ollama"
         }
     ]
+    
+    # 首先尝试使用已加载的模型
+    if loaded_model is not None:
+        print(f"🎯 Using pre-loaded model ({model_type})")
+        result = generate_with_loaded_model(prompt, max_tokens, temperature)
+        if result not in ["MODEL_NOT_LOADED", "UNKNOWN_MODEL_TYPE"] and not result.startswith("GENERATION_ERROR"):
+            return result
+        else:
+            print(f"⚠️ Pre-loaded model failed: {result}")
     
     print(f"🔍 Attempting to connect to local LLM services...")
     
@@ -431,8 +666,28 @@ if __name__ == "__main__":
     for template_name, template_desc in SYSTEM_TEMPLATES.items():
         print(f"  - {template_name}: {template_desc[:80]}{'...' if len(template_desc) > 80 else ''}")
     
-    # 检查LLM服务
-    available_llm_services = check_llm_services()
+    # 查找并尝试加载模型
+    print("\n" + "="*50)
+    model_files = find_model_files()
+    
+    if model_files:
+        print(f"\n🎯 Attempting to load the best model...")
+        # 尝试加载最大的模型（通常是最好的）
+        best_model = model_files[0]
+        
+        if load_model(best_model):
+            print(f"🎉 Successfully loaded model: {best_model['name']}")
+            handler_mode = "Direct Model Loading"
+        else:
+            print(f"❌ Failed to load model, checking LLM services...")
+            # 检查LLM服务作为备选
+            available_llm_services = check_llm_services()
+            handler_mode = f"LLM Services ({len(available_llm_services)} available)" if available_llm_services else "Simulated AI"
+    else:
+        print(f"❌ No model files found, checking LLM services...")
+        # 检查LLM服务
+        available_llm_services = check_llm_services()
+        handler_mode = f"LLM Services ({len(available_llm_services)} available)" if available_llm_services else "Simulated AI"
     
     start_gpu_monitoring()
     
@@ -440,7 +695,8 @@ if __name__ == "__main__":
     log_gpu_status()
     
     print(f"\n🚀 Starting RunPod AI serverless...")
-    print(f"🎯 LLM Services Available: {len(available_llm_services)}")
-    print(f"🔧 Handler Mode: {'Real AI' if available_llm_services else 'Simulated AI'}")
+    print(f"🔧 Handler Mode: {handler_mode}")
+    print(f"🎯 Model Status: {'Loaded' if loaded_model else 'Not Loaded'}")
+    print("="*50)
     
     runpod.serverless.start({"handler": handler}) 
