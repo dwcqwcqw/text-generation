@@ -99,84 +99,47 @@ def start_gpu_monitoring():
     monitor_thread.start()
     print("🖥️ GPU监控已启动，每30秒记录一次状态")
 
-def find_model_files():
-    """在常见路径中查找模型文件"""
-    print("🔍 Searching for model files in volume...")
+def get_available_models():
+    """获取指定路径的模型列表"""
+    print("🔍 Checking for models in specified paths...")
     
-    # 常见的模型存储路径
-    search_paths = [
-        "/runpod-volume",
-        "/workspace", 
-        "/models",
-        "/app/models",
-        "/data",
-        "/storage",
-        ".",
-        os.path.expanduser("~")
+    # 你指定的模型路径
+    model_paths = [
+        {
+            'path': '/runpod-volume/text_models/L3.2-8X3B.gguf',
+            'name': 'Llama 3.2 8X3B MOE',
+            'id': 'L3.2-8X3B',
+            'type': 'gguf'
+        },
+        {
+            'path': '/runpod-volume/text_models/L3.2-8X4B.gguf', 
+            'name': 'Llama 3.2 8X4B MOE V2',
+            'id': 'L3.2-8X4B',
+            'type': 'gguf'
+        }
     ]
     
-    model_files = []
+    available_models = []
     
-    for base_path in search_paths:
-        if os.path.exists(base_path):
-            print(f"📁 Checking {base_path}...")
+    for model_info in model_paths:
+        print(f"📍 Checking: {model_info['path']}")
+        
+        if os.path.exists(model_info['path']):
             try:
-                for root, dirs, files in os.walk(base_path):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        file_lower = file.lower()
-                        
-                        # 查找模型文件
-                        if (file_lower.endswith('.gguf') or 
-                            file_lower.endswith('.bin') or
-                            file_lower.endswith('.safetensors') or
-                            'pytorch_model' in file_lower or
-                            'model.safetensors' in file_lower):
-                            
-                            size_mb = os.path.getsize(file_path) / (1024 * 1024)
-                            model_files.append({
-                                'path': file_path,
-                                'name': file,
-                                'size_mb': size_mb,
-                                'type': 'gguf' if file_lower.endswith('.gguf') else 'transformers'
-                            })
-                            print(f"  📄 Found: {file} ({size_mb:.1f}MB)")
-                            
-                        # 查找模型目录（包含config.json的目录）
-                        if file == 'config.json':
-                            model_dir = root
-                            try:
-                                with open(file_path, 'r') as f:
-                                    config = json.load(f)
-                                    if 'model_type' in config:
-                                        model_files.append({
-                                            'path': model_dir,
-                                            'name': os.path.basename(model_dir),
-                                            'size_mb': sum(os.path.getsize(os.path.join(model_dir, f)) 
-                                                         for f in os.listdir(model_dir) 
-                                                         if os.path.isfile(os.path.join(model_dir, f))) / (1024 * 1024),
-                                            'type': 'transformers',
-                                            'model_type': config.get('model_type', 'unknown')
-                                        })
-                                        print(f"  📁 Found model dir: {os.path.basename(model_dir)} ({config.get('model_type', 'unknown')})")
-                            except:
-                                pass
-                                
-            except PermissionError:
-                print(f"  ❌ Permission denied accessing {base_path}")
+                size_mb = os.path.getsize(model_info['path']) / (1024 * 1024)
+                model_info['size_mb'] = size_mb
+                available_models.append(model_info)
+                print(f"  ✅ Found: {model_info['name']} ({size_mb:.1f}MB)")
             except Exception as e:
-                print(f"  ⚠️ Error scanning {base_path}: {e}")
+                print(f"  ⚠️ Error reading {model_info['name']}: {e}")
         else:
-            print(f"  ❌ Path {base_path} does not exist")
+            print(f"  ❌ Not found: {model_info['name']}")
     
-    # 按大小排序，大模型优先
-    model_files.sort(key=lambda x: x['size_mb'], reverse=True)
+    print(f"\n📊 Available models: {len(available_models)}")
+    for i, model in enumerate(available_models):
+        print(f"  {i+1}. {model['name']} ({model['size_mb']:.1f}MB)")
     
-    print(f"\n📊 Found {len(model_files)} potential model files:")
-    for i, model in enumerate(model_files[:10]):  # 只显示前10个
-        print(f"  {i+1}. {model['name']} ({model['size_mb']:.1f}MB, {model['type']})")
-    
-    return model_files
+    return available_models
 
 # 全局变量存储加载的模型
 loaded_model = None
@@ -666,25 +629,49 @@ if __name__ == "__main__":
     for template_name, template_desc in SYSTEM_TEMPLATES.items():
         print(f"  - {template_name}: {template_desc[:80]}{'...' if len(template_desc) > 80 else ''}")
     
-    # 查找并尝试加载模型
+    # 查找并尝试加载指定的模型
     print("\n" + "="*50)
-    model_files = find_model_files()
+    available_models = get_available_models()
     
-    if model_files:
-        print(f"\n🎯 Attempting to load the best model...")
-        # 尝试加载最大的模型（通常是最好的）
-        best_model = model_files[0]
+    if available_models:
+        print(f"\n🎯 Attempting to load the first available model...")
+        # 优先加载8X4B模型（如果存在），否则加载8X3B
+        target_model = None
         
-        if load_model(best_model):
-            print(f"🎉 Successfully loaded model: {best_model['name']}")
-            handler_mode = "Direct Model Loading"
+        # 查找8X4B模型
+        for model in available_models:
+            if model['id'] == 'L3.2-8X4B':
+                target_model = model
+                print(f"🎯 Selected: {model['name']} (preferred 8X4B version)")
+                break
+        
+        # 如果没有8X4B，使用8X3B
+        if not target_model:
+            for model in available_models:
+                if model['id'] == 'L3.2-8X3B':
+                    target_model = model
+                    print(f"🎯 Selected: {model['name']} (8X3B version)")
+                    break
+        
+        # 如果还没有，使用第一个可用的
+        if not target_model:
+            target_model = available_models[0]
+            print(f"🎯 Selected: {target_model['name']} (first available)")
+        
+        if load_model(target_model):
+            print(f"🎉 Successfully loaded model: {target_model['name']}")
+            handler_mode = f"Direct Model Loading ({target_model['name']})"
         else:
             print(f"❌ Failed to load model, checking LLM services...")
             # 检查LLM服务作为备选
             available_llm_services = check_llm_services()
             handler_mode = f"LLM Services ({len(available_llm_services)} available)" if available_llm_services else "Simulated AI"
     else:
-        print(f"❌ No model files found, checking LLM services...")
+        print(f"❌ No models found at specified paths:")
+        print(f"   - /runpod-volume/text_models/L3.2-8X3B.gguf")
+        print(f"   - /runpod-volume/text_models/L3.2-8X4B.gguf")
+        print(f"💡 Please ensure models are uploaded to the correct paths")
+        print(f"🔄 Checking LLM services as fallback...")
         # 检查LLM服务
         available_llm_services = check_llm_services()
         handler_mode = f"LLM Services ({len(available_llm_services)} available)" if available_llm_services else "Simulated AI"
