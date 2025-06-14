@@ -7,8 +7,8 @@ export default function TestPage() {
   const [loading, setLoading] = useState(false)
   const [apiKey, setApiKey] = useState('rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb')
   const [endpoint, setEndpoint] = useState('https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync')
-  const [endpointId, setEndpointId] = useState('4cx6jtjdx6hdhr')
-  const [prompt, setPrompt] = useState('Hello, how are you today?')
+      const [endpointId, setEndpointId] = useState('4cx6jtjdx6hdhr')
+    const [prompt, setPrompt] = useState('Hello, how are you today?')
 
   useEffect(() => {
     // 从localStorage加载保存的API Key
@@ -26,65 +26,44 @@ export default function TestPage() {
   }
 
   const testRunPodAPI = async () => {
-    setLoading(true)
-    setTestResult('Testing...')
+    setLoading(true);
+    setTestResult('Testing...');
 
     try {
-      console.log('Testing RunPod API with:', {
-        endpoint,
-        apiKey: apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET',
-        prompt
-      })
-
-      const requestPayload = {
-        input: {
-          prompt: prompt
-        }
-      }
-
-      console.log('Request Payload:', requestPayload)
-
-      const response = await fetch(endpoint, {
+      const response = await fetch('https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
+          'Authorization': `Bearer rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb`
         },
-        body: JSON.stringify(requestPayload)
-      })
+        body: JSON.stringify({
+          input: {
+            prompt: prompt
+          }
+        })
+      });
 
-      console.log('Response Status:', response.status)
-      console.log('Response Headers:', Object.fromEntries(response.headers.entries()))
-
-      const responseText = await response.text()
-      console.log('Raw Response:', responseText)
-
-      let data
-      try {
-        data = JSON.parse(responseText)
-      } catch (e) {
-        setTestResult(`❌ Invalid JSON Response:\n${responseText}`)
-        setLoading(false)
-        return
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      if (response.ok) {
-        if (data.status === "success" && data.output) {
-          setTestResult(`✅ Success!\n\nStatus: ${data.status}\nResponse: ${data.output}\n\nFull Response: ${JSON.stringify(data, null, 2)}`)
-        } else {
-          setTestResult(`⚠️ Unexpected Response Format:\n${JSON.stringify(data, null, 2)}`)
-        }
+      const data = await response.json();
+      console.log('RunPod Response:', data);
+      
+      if (data.status === 'COMPLETED') {
+        setTestResult(`✅ Success!\n\nOutput: ${data.output}\n\nFull Response: ${JSON.stringify(data, null, 2)}`);
+      } else if (data.status === 'FAILED') {
+        setTestResult(`❌ Failed!\n\nError: ${data.error}\n\nFull Response: ${JSON.stringify(data, null, 2)}`);
       } else {
-        setTestResult(`❌ HTTP Error ${response.status}:\n${JSON.stringify(data, null, 2)}`)
+        setTestResult(`⚠️ Status: ${data.status}\n\nFull Response: ${JSON.stringify(data, null, 2)}`);
       }
-
-    } catch (error) {
-      console.error('Test Error:', error)
-      setTestResult(`❌ Network Error:\n${error instanceof Error ? error.message : String(error)}`)
+    } catch (err) {
+      console.error('Error:', err);
+      setTestResult(`❌ Network Error:\n${err instanceof Error ? err.message : 'Unknown error occurred'}`);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false)
-  }
+  };
 
   const testRunPodStatus = async () => {
     setLoading(true)
@@ -285,10 +264,10 @@ export default function TestPage() {
                {loading ? '检查中...' : '检查 RunPod 健康'}
              </button>
              
-             <button
-               onClick={testRunPodAPI}
-               disabled={loading}
-               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                           <button
+                onClick={testRunPodAPI}
+                disabled={loading}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
              >
                {loading ? '测试中...' : '测试 RunPod API'}
              </button>
@@ -305,9 +284,9 @@ export default function TestPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">测试结果</h2>
           
-          <pre className="bg-gray-100 p-4 rounded-md text-sm overflow-auto max-h-96 whitespace-pre-wrap">
-            {testResult || '点击上面的按钮开始测试...'}
-          </pre>
+                      <pre className="bg-gray-100 p-4 rounded-md text-sm overflow-auto max-h-96 whitespace-pre-wrap">
+              {testResult || '点击上面的按钮开始测试...'}
+            </pre>
         </div>
 
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-6">
