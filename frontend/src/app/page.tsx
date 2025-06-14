@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Send, Bot, User, Search, Plus, ChevronDown, MessageSquare, RefreshCw, Settings } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
+// 强制更新 - 只显示两个模型：L3.2-8X3B.gguf 和 L3.2-8X4B.gguf
+
 interface Message {
   id: string
   content: string
@@ -27,17 +29,18 @@ interface Model {
   parameters: string
 }
 
+// 只显示两个实际的GGUF模型
 const models: Model[] = [
   {
     id: 'L3.2-8X3B',
-    name: 'Llama 3.2-8X3B (18.2GB)',
-    description: 'Llama-3.2 MOE 8X3B模型，18.4B参数，适合复杂对话',
+    name: 'L3.2-8X3B.gguf',
+    description: '18.4B参数，适合复杂对话',
     parameters: '/runpod-volume/text_models/L3.2-8X3B.gguf'
   },
   {
     id: 'L3.2-8X4B',
-    name: 'Llama 3.2-8X4B (13.9GB)',
-    description: 'Llama-3.2 MOE 8X4B模型，21B参数，更快响应',
+    name: 'L3.2-8X4B.gguf',
+    description: '21B参数，更快响应',
     parameters: '/runpod-volume/text_models/L3.2-8X4B.gguf'
   }
 ]
