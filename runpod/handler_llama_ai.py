@@ -113,58 +113,79 @@ def load_gguf_model(model_path: str, use_gpu: bool = True):
     try:
         from llama_cpp import Llama
         
+        # Check if CUDA build is available
+        try:
+            import llama_cpp
+            logger.info(f"llama-cpp-python version: {llama_cpp.__version__}")
+        except:
+            logger.warning("Could not get llama-cpp-python version")
+        
         # GPU settings - force GPU usage if available
         if use_gpu:
-            n_gpu_layers = 35  # Use most layers on GPU (32 transformer layers + embeddings)
+            n_gpu_layers = -1  # Use all available GPU layers
         else:
             n_gpu_layers = 0
         
         logger.info(f"Loading GGUF model from {model_path}")
         logger.info(f"GPU layers: {n_gpu_layers}, Use GPU: {use_gpu}")
         
-        # Optimized parameters for GPU inference
-        model = Llama(
-            model_path=model_path,
-            n_ctx=2048,  # Reduced context for faster loading
-            n_batch=256,  # Smaller batch for memory efficiency
-            n_gpu_layers=n_gpu_layers,  # Use GPU layers
-            verbose=True,
-            n_threads=2,  # Fewer CPU threads when using GPU
-            use_mmap=True,  # Memory mapping for efficiency
-            use_mlock=False,  # Don't lock memory
-            f16_kv=True,  # Use half precision for key-value cache
-            logits_all=False,  # Only compute logits for last token
-            vocab_only=False,  # Load full model
-            rope_scaling_type=-1,  # Default rope scaling
-            rope_freq_base=0.0,  # Use model default
-            rope_freq_scale=0.0,  # Use model default
-        )
-        
-        logger.info("GGUF model loaded successfully with GPU acceleration")
-        return model, "gguf"
+        # Try with maximum GPU acceleration first
+        try:
+            model = Llama(
+                model_path=model_path,
+                n_ctx=2048,  # Context length
+                n_batch=512,  # Batch size
+                n_gpu_layers=n_gpu_layers,  # Use all GPU layers
+                verbose=True,
+                n_threads=1,  # Minimal CPU threads when using GPU
+                use_mmap=True,  # Memory mapping
+                use_mlock=False,  # Don't lock memory
+                f16_kv=True,  # Half precision for KV cache
+                logits_all=False,  # Only last token logits
+                vocab_only=False,  # Full model
+            )
+            logger.info("GGUF model loaded successfully with full GPU acceleration")
+            return model, "gguf"
+            
+        except Exception as e1:
+            logger.warning(f"Full GPU loading failed: {e1}")
+            
+            # Try with partial GPU layers
+            if use_gpu:
+                logger.info("Retrying with partial GPU layers...")
+                try:
+                    model = Llama(
+                        model_path=model_path,
+                        n_ctx=2048,
+                        n_batch=256,
+                        n_gpu_layers=20,  # Partial GPU layers
+                        verbose=True,
+                        n_threads=2,
+                        use_mmap=True,
+                        use_mlock=False,
+                    )
+                    logger.info("GGUF model loaded with partial GPU acceleration")
+                    return model, "gguf"
+                except Exception as e2:
+                    logger.warning(f"Partial GPU loading failed: {e2}")
+            
+            # Final fallback to CPU
+            logger.info("Falling back to CPU-only loading...")
+            model = Llama(
+                model_path=model_path,
+                n_ctx=2048,
+                n_batch=128,
+                n_gpu_layers=0,  # CPU only
+                verbose=True,
+                n_threads=4,
+                use_mmap=True,
+                use_mlock=False,
+            )
+            logger.info("GGUF model loaded on CPU (fallback)")
+            return model, "gguf"
         
     except Exception as e:
-        logger.error(f"Failed to load GGUF model: {e}")
-        # Try fallback with fewer GPU layers
-        if use_gpu and n_gpu_layers > 0:
-            logger.info("Retrying with fewer GPU layers...")
-            try:
-                model = Llama(
-                    model_path=model_path,
-                    n_ctx=2048,
-                    n_batch=256,
-                    n_gpu_layers=20,  # Fewer GPU layers
-                    verbose=True,
-                    n_threads=2,
-                    use_mmap=True,
-                    use_mlock=False,
-                    f16_kv=True,
-                )
-                logger.info("GGUF model loaded with reduced GPU layers")
-                return model, "gguf"
-            except Exception as e2:
-                logger.error(f"Fallback also failed: {e2}")
-        
+        logger.error(f"Failed to load GGUF model completely: {e}")
         return None, None
 
 def load_transformers_model(model_path: str, use_gpu: bool = True):

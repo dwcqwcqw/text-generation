@@ -23,6 +23,12 @@ RUN pip install runpod>=1.6.0
 # 验证runpod安装
 RUN python -c "import runpod; from runpod.serverless import start; print('RunPod安装成功')"
 
+# 设置CUDA环境变量用于llama-cpp-python
+ENV CUDA_VISIBLE_DEVICES=0
+ENV LLAMA_CUBLAS=1
+ENV CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+ENV FORCE_CMAKE=1
+
 # 安装其他依赖
 COPY requirements.txt .
 RUN pip install -r requirements.txt
@@ -31,4 +37,4 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # 设置入口点
-CMD ["python", "handler.py"] 
+CMD ["python", "handler_llama_ai.py"] 
