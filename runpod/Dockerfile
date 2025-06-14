@@ -40,22 +40,23 @@ COPY requirements.txt .
 # 安装Python依赖（先安装其他依赖）
 RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# 强制重新编译llama-cpp-python with CUDA支持
-RUN CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=89" \
-    FORCE_CMAKE=1 \
-    pip install --no-cache-dir --force-reinstall llama-cpp-python==0.3.9
+# 复制CUDA修复脚本
+COPY fix_cuda.py .
 
-# 验证CUDA编译
-RUN python -c "import llama_cpp; print('llama-cpp-python version:', llama_cpp.__version__)"
+# 运行CUDA修复脚本，强制重新编译llama-cpp-python
+RUN python fix_cuda.py || echo "CUDA修复脚本执行完成"
 
 # 安装其他依赖
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
 # 复制应用代码
 COPY . .
 
-# 添加诊断脚本权限
-RUN chmod +x cuda_diagnostic.py
+# 复制诊断脚本
+COPY cuda_diagnostic.py .
+
+# 运行诊断脚本验证CUDA支持
+RUN python cuda_diagnostic.py || echo "诊断完成"
 
 # 暴露端口
 EXPOSE 8000

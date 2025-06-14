@@ -221,10 +221,11 @@ def handler(event):
         logger.info(f"👤 人格设置: '{persona}'")
         
         if not prompt:
+            # RunPod格式的错误响应
             error_result = {
-                "output": "请提供有效的提示词",
-                "status": "error",
-                "model_info": "模型未使用 - 无效输入"
+                "status": "FAILED",
+                "error": "请提供有效的提示词",
+                "output": None
             }
             logger.error(f"❌ 无效输入，返回: {json.dumps(error_result, ensure_ascii=False)}")
             return error_result
@@ -237,10 +238,10 @@ def handler(event):
         # 生成响应
         response = generate_response(prompt, persona)
         
-        # 返回标准格式
+        # 返回RunPod标准格式
         result = {
-            "output": response,
-            "status": "success",
+            "status": "COMPLETED",  # 前端期望的状态
+            "output": response,     # 前端期望的输出字段
             "model_info": f"模型: {os.path.basename(model_path) if model_path else 'unknown'}"
         }
         
@@ -249,10 +250,11 @@ def handler(event):
         
     except Exception as e:
         logger.error(f"❌ Handler错误: {e}")
+        # RunPod格式的错误响应
         error_result = {
-            "output": f"处理请求时出现错误: {str(e)}",
-            "status": "error",
-            "model_info": "错误状态"
+            "status": "FAILED",
+            "error": f"处理请求时出现错误: {str(e)}",
+            "output": None
         }
         logger.error(f"❌ 错误返回: {json.dumps(error_result, ensure_ascii=False)}")
         return error_result
