@@ -168,10 +168,8 @@ export default function ChatPage() {
   const generateResponse = async (userInput: string, history: Message[] = []) => {
     setIsLoading(true)
 
-    // RunPod API 配置 - 使用完整的API Key
-    const RUNPOD_API_KEY = process.env.NEXT_PUBLIC_RUNPOD_API_KEY || 
-                          process.env.RUNPOD_API_KEY || 
-                          'rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb' // 完整的API Key
+    // RunPod API 配置 - 直接使用完整的API Key
+    const RUNPOD_API_KEY = 'rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb'
     
     const RUNPOD_ENDPOINT_ID = process.env.NEXT_PUBLIC_RUNPOD_ENDPOINT_ID || 
                               process.env.RUNPOD_ENDPOINT_ID || 
@@ -217,42 +215,20 @@ export default function ChatPage() {
         endpointId: RUNPOD_ENDPOINT_ID
       })
 
-      // 根据模型ID设置正确的模型路径 - 确保只使用指定的模型
-      const model_paths = {
-        "L3.2-8X3B": "/runpod-volume/text_models/L3.2-8X3B.gguf",
-        "L3.2-8X4B": "/runpod-volume/text_models/L3.2-8X4B.gguf"
-      }
-      
-      const model_path = model_paths[selectedModel.id as keyof typeof model_paths]
-      
-      if (!model_path) {
-        console.error(`Unsupported model: ${selectedModel.id}. Only L3.2-8X3B and L3.2-8X4B are supported.`)
-        setIsLoading(false)
-        return
-      }
-
-      // 构建适合Llama模型的提示词
-      const llama_prompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful, harmless, and honest assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${userInput}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`
+      // 当前使用简单的echo handler进行测试
 
       // 首先尝试RunPod API调用（如果有API Key）
       if (FINAL_API_KEY) {
         try {
+          // 使用简化的请求格式，匹配我们的echo handler
           const requestPayload = {
             input: {
-              model_path: model_path,
-              prompt: llama_prompt,
-              max_tokens: 150,
-              temperature: 0.7,
-              top_p: 0.9,
-              repeat_penalty: 1.05,
-              stop: ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>"],
-              stream: false
+              prompt: userInput  // 直接使用用户输入，不需要复杂的Llama格式
             }
           }
           
           console.log('Sending RunPod request:', {
             endpoint: RUNPOD_ENDPOINT,
-            modelPath: model_path,
             selectedModelId: selectedModel.id,
             payload: requestPayload
           })
@@ -273,8 +249,9 @@ export default function ChatPage() {
             console.log('RunPod Response:', data)
             
             let aiResponse = ''
-            if (data.status === "COMPLETED" && data.output?.text) {
-              aiResponse = data.output.text.replace(llama_prompt, "").trim()
+            // 我们的handler直接返回字符串作为output
+            if (data.status === "COMPLETED" && data.output) {
+              aiResponse = typeof data.output === 'string' ? data.output : data.output.toString()
             }
             
             if (aiResponse) {
@@ -298,6 +275,8 @@ export default function ChatPage() {
               setIsLoading(false)
               return
             }
+          } else {
+            console.log('RunPod API error:', response.status, await response.text())
           }
         } catch (apiError) {
           console.log('RunPod API not available, using offline mode:', apiError)
