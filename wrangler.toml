@@ -1,8 +1,9 @@
 name = "text-generation-chat"
 compatibility_date = "2024-01-15"
 
-# Pages 输出目录配置
-pages_build_output_dir = "dist"
+# Pages 构建配置
+build = { command = "cd frontend && npm install && npm run build", cwd = "." }
+pages_build_output_dir = "frontend/out"
 
 [env.production.vars]
 NODE_VERSION = "18"
