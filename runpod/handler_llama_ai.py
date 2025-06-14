@@ -60,44 +60,59 @@ def find_models():
     return sorted(models, key=lambda x: x[1])  # 按大小排序
 
 def load_gguf_model(model_path: str):
-    """强制GPU模式加载GGUF模型"""
+    """使用llama-cpp-python加载GGUF模型，强制使用GPU"""
     try:
+        # 导入llama-cpp
         from llama_cpp import Llama
         import llama_cpp
         
-        logger.info(f"🚀 llama-cpp-python版本: {llama_cpp.__version__}")
+        logger.info(f"llama-cpp-python版本: {llama_cpp.__version__}")
         logger.info(f"📂 强制GPU模式加载: {model_path}")
         
-        # 检查GPU
-        util, mem_used, mem_total, temp = check_gpu_usage()
-        if mem_total and mem_total > 40:  # L40 GPU
-            logger.info(f"🎯 检测到L40 GPU ({mem_total:.1f}GB)，使用全部GPU层")
-            n_gpu_layers = -1  # 全部层到GPU
-        else:
-            logger.info(f"🎯 使用默认GPU配置")
-            n_gpu_layers = 32  # 大部分层到GPU
+        # 检查GPU状态
+        check_gpu_usage()
         
-        # 强制GPU模式参数 - 使用更激进的设置
+        # 根据GPU显存动态设置参数
+        _, mem_used, mem_total, _ = check_gpu_usage()
+        if mem_total and mem_total > 40:  # L40 GPU有45GB显存
+            logger.info(f"🎯 检测到L40 GPU ({mem_total:.1f}GB)，使用全部GPU层和完整上下文")
+            n_gpu_layers = -1  # 全部层到GPU
+            n_ctx = 131072     # 使用模型的完整上下文长度
+            n_batch = 2048     # 大批处理
+        elif mem_total and mem_total > 20:  # L4 GPU有22.5GB显存
+            logger.info(f"🎯 检测到L4 GPU ({mem_total:.1f}GB)，使用大部分GPU层")
+            n_gpu_layers = 25  # 大部分层到GPU
+            n_ctx = 65536      # 使用一半上下文
+            n_batch = 1024     # 中等批处理
+        else:
+            logger.info(f"🎯 检测到其他GPU ({mem_total:.1f}GB)，使用适量GPU层")
+            n_gpu_layers = 15  # 适量层到GPU
+            n_ctx = 32768      # 使用四分之一上下文
+            n_batch = 512      # 小批处理
+        
+        logger.info(f"🔧 GPU配置: n_gpu_layers={n_gpu_layers}, n_ctx={n_ctx}, n_batch={n_batch}")
+        
+        # 强制GPU模式，不允许CPU回退
         model = Llama(
             model_path=model_path,
-            n_ctx=2048,           # 减少上下文窗口
-            n_batch=512,          # 减少批处理大小
-            n_gpu_layers=n_gpu_layers,  # 强制GPU层数
-            verbose=True,         # 开启详细日志查看层分配
-            n_threads=1,          # 最少CPU线程
-            use_mmap=True,
-            use_mlock=False,
-            f16_kv=True,          # 使用半精度
-            logits_all=False,     # 不计算所有logits
+            n_ctx=n_ctx,              # 使用完整或适当的上下文长度
+            n_batch=n_batch,          # 大批处理大小
+            n_gpu_layers=n_gpu_layers, # GPU层数
+            verbose=True,             # 显示详细日志以查看层分配
+            n_threads=1,              # 最少CPU线程，专注GPU
+            use_mmap=True,            # 使用内存映射
+            use_mlock=False,          # 不锁定内存
+            f16_kv=True,              # 使用FP16 KV缓存节省显存
+            logits_all=False,         # 不计算所有logits节省计算
         )
         
         logger.info("✅ 模型GPU加载成功")
-        check_gpu_usage()  # 检查加载后的GPU状态
+        check_gpu_usage()  # 显示加载后的GPU状态
         return model, "gguf"
         
     except Exception as e:
         logger.error(f"❌ GGUF模型加载失败: {e}")
-        raise
+        raise e
 
 def initialize_model():
     """初始化模型"""
@@ -123,20 +138,36 @@ def initialize_model():
     logger.info(f"✅ 模型初始化完成: {model_path}")
     return True
 
-def clean_prompt(prompt: str) -> str:
-    """清理提示词，避免重复标记"""
-    # 移除可能的重复标记
+def format_prompt(prompt: str, persona: str = "default") -> str:
+    """格式化提示词，避免重复BOS标记"""
+    
+    # 首先清理可能的重复BOS标记
+    prompt = prompt.replace("<|begin_of_text|><|begin_of_text|>", "<|begin_of_text|>")
+    prompt = prompt.replace("<|begin_of_text|>", "")  # 先移除所有BOS标记
     prompt = prompt.strip()
     
-    # 如果已经有开始标记，直接返回
-    if '<|begin_of_text|>' in prompt:
-        logger.info("📝 提示词已包含格式标记，直接使用")
-        return prompt
+    # 根据人格设置系统提示词
+    system_prompts = {
+        "default": "You are a helpful, intelligent AI assistant for general conversations.",
+        "creative": "You are a creative AI assistant specialized in creative writing, storytelling, and fiction.",
+        "professional": "You are a professional AI assistant providing formal, structured responses for business and analysis.",
+        "casual": "You are a friendly, relaxed AI assistant with a conversational style.",
+        "technical": "You are a technical AI assistant with expertise in programming, technology, and engineering.",
+        "chinese": "你是一个专业的中文AI助手，理解中文文化背景。"
+    }
     
-    # 添加标准格式
-    formatted = f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-    logger.info(f"📝 格式化提示词: {formatted[:100]}...")
-    return formatted
+    system_prompt = system_prompts.get(persona, system_prompts["default"])
+    
+    # 使用正确的Llama-3.2格式，只添加一次BOS标记
+    formatted_prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+{system_prompt}<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+"""
+    
+    return formatted_prompt
 
 def generate_response(prompt: str, persona: str = "default") -> str:
     """生成AI响应"""
@@ -149,7 +180,7 @@ def generate_response(prompt: str, persona: str = "default") -> str:
     logger.info(f"📝 原始输入: '{prompt}'")
     
     # 清理提示词
-    formatted_prompt = clean_prompt(prompt)
+    formatted_prompt = format_prompt(prompt, persona)
     logger.info(f"📝 格式化后长度: {len(formatted_prompt)}")
     
     # 检查生成前GPU状态
@@ -206,7 +237,7 @@ def generate_response(prompt: str, persona: str = "default") -> str:
 
 def handler(event):
     """RunPod处理函数"""
-    global model
+    global model, model_path
     
     try:
         logger.info("🎯 Handler调用")
@@ -216,9 +247,11 @@ def handler(event):
         input_data = event.get("input", {})
         prompt = input_data.get("prompt", "").strip()
         persona = input_data.get("persona", "default")
+        requested_model_path = input_data.get("model_path", "")  # 前端指定的模型路径
         
         logger.info(f"📝 提取的提示词: '{prompt}'")
         logger.info(f"👤 人格设置: '{persona}'")
+        logger.info(f"🎯 请求的模型: '{requested_model_path}'")
         
         if not prompt:
             # RunPod格式的错误响应
@@ -229,6 +262,12 @@ def handler(event):
             }
             logger.error(f"❌ 无效输入，返回: {json.dumps(error_result, ensure_ascii=False)}")
             return error_result
+        
+        # 检查是否需要切换模型
+        if requested_model_path and requested_model_path != model_path:
+            logger.info(f"🔄 需要切换模型: {model_path} -> {requested_model_path}")
+            model = None  # 重置模型，强制重新加载
+            model_path = requested_model_path
         
         # 初始化模型（如果需要）
         if not model:

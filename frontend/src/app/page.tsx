@@ -29,40 +29,16 @@ interface Model {
 
 const models: Model[] = [
   {
-    id: 'llama-default',
-    name: 'AI Assistant (Default)',
-    description: 'Helpful, intelligent AI assistant for general conversations',
-    parameters: 'Llama 3.2 MOE 18.4B'
+    id: 'L3.2-8X3B',
+    name: 'Llama 3.2-8X3B (18.2GB)',
+    description: 'Llama-3.2 MOE 8X3B模型，18.4B参数，适合复杂对话',
+    parameters: '/runpod-volume/text_models/L3.2-8X3B.gguf'
   },
   {
-    id: 'llama-creative',
-    name: 'Creative Writer',
-    description: 'Specialized in creative writing, storytelling, and fiction',
-    parameters: 'Llama 3.2 MOE 18.4B'
-  },
-  {
-    id: 'llama-professional',
-    name: 'Professional Assistant',
-    description: 'Formal, structured responses for business and analysis',
-    parameters: 'Llama 3.2 MOE 18.4B'
-  },
-  {
-    id: 'llama-casual',
-    name: 'Casual Chat',
-    description: 'Friendly, relaxed conversational style',
-    parameters: 'Llama 3.2 MOE 18.4B'
-  },
-  {
-    id: 'llama-technical',
-    name: 'Technical Expert',
-    description: 'Programming, technology, and engineering expertise',
-    parameters: 'Llama 3.2 MOE 18.4B'
-  },
-  {
-    id: 'llama-chinese',
-    name: '中文助手',
-    description: '专业的中文AI助手，理解中文文化背景',
-    parameters: 'Llama 3.2 MOE 18.4B'
+    id: 'L3.2-8X4B',
+    name: 'Llama 3.2-8X4B (13.9GB)',
+    description: 'Llama-3.2 MOE 8X4B模型，21B参数，更快响应',
+    parameters: '/runpod-volume/text_models/L3.2-8X4B.gguf'
   }
 ]
 
@@ -243,8 +219,6 @@ export default function ChatPage() {
         endpointId: RUNPOD_ENDPOINT_ID
       })
 
-      // 当前使用简单的echo handler进行测试
-
       // 首先尝试RunPod API调用（如果有API Key）
       if (FINAL_API_KEY) {
         try {
@@ -254,28 +228,23 @@ export default function ChatPage() {
             content: msg.content
           }))
           
-          // 根据选择的模型确定系统模版
+          // 根据选择的模型确定系统模版和模型路径
           let systemTemplate = 'default'
-          if (selectedModel.id === 'llama-creative') {
-            systemTemplate = 'creative'
-          } else if (selectedModel.id === 'llama-chinese') {
-            systemTemplate = 'chinese'
-          } else if (selectedModel.id === 'llama-technical') {
-            systemTemplate = 'technical'
-          } else if (selectedModel.id === 'llama-professional') {
-            systemTemplate = 'professional'
-          } else if (selectedModel.id === 'llama-casual') {
-            systemTemplate = 'casual'
+          if (selectedModel.id === 'L3.2-8X3B') {
+            systemTemplate = 'default'  // 使用默认模板
+          } else if (selectedModel.id === 'L3.2-8X4B') {
+            systemTemplate = 'default'  // 使用默认模板
           }
           
-          // 使用新的AI handler格式
+          // 使用新的AI handler格式，包含模型路径
           const requestPayload = {
             input: {
               prompt: userInput,
               system_template: systemTemplate,
               history: conversationHistory,
               max_tokens: 1000,
-              temperature: 0.7
+              temperature: 0.7,
+              model_path: selectedModel.parameters  // 传递实际的模型文件路径
             }
           }
           
