@@ -76,6 +76,36 @@ def force_x86_64_environment():
         os.environ[key] = value
         logger.info(f"  设置 {key}={value}")
 
+def install_dependencies():
+    """安装所有必要的依赖"""
+    logger.info("🔄 安装RunPod依赖...")
+    
+    packages = [
+        ('GPUtil', 'GPUtil'),
+        ('runpod', 'runpod'),
+    ]
+    
+    success_count = 0
+    for package_name, import_name in packages:
+        try:
+            # 检查是否已安装
+            __import__(import_name)
+            logger.info(f"✅ {package_name} 已安装")
+            success_count += 1
+        except ImportError:
+            # 安装包
+            logger.info(f"📦 安装 {package_name}...")
+            try:
+                result = subprocess.run([
+                    sys.executable, '-m', 'pip', 'install', package_name
+                ], capture_output=True, text=True, check=True)
+                logger.info(f"✅ {package_name} 安装成功")
+                success_count += 1
+            except subprocess.CalledProcessError as e:
+                logger.error(f"❌ {package_name} 安装失败: {e.stderr}")
+    
+    return success_count == len(packages)
+
 def reinstall_llama_cpp_cuda():
     """重新安装CUDA版本的llama-cpp-python"""
     logger.info("🔄 重新安装CUDA版本的llama-cpp-python...")
@@ -244,17 +274,22 @@ def main():
     # 2. 强制设置环境
     force_x86_64_environment()
     
-    # 3. 重新安装CUDA版本
+    # 3. 安装基础依赖
+    if not install_dependencies():
+        logger.error("❌ 基础依赖安装失败")
+        return False
+    
+    # 4. 重新安装CUDA版本
     if not reinstall_llama_cpp_cuda():
         logger.error("❌ CUDA版本安装失败，请检查网络连接")
         return False
     
-    # 4. 测试GPU加载
+    # 5. 测试GPU加载
     if not test_gpu_loading():
         logger.error("❌ GPU加载测试失败")
         return False
     
-    # 5. 创建优化Dockerfile
+    # 6. 创建优化Dockerfile
     create_optimized_dockerfile()
     
     logger.info("🎉 RunPod GPU修复完成！")

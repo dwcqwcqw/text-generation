@@ -41,7 +41,11 @@ os.environ['CXXFLAGS'] = '-march=x86-64'
 
 try:
     from llama_cpp import Llama
-    import GPUtil
+    try:
+        import GPUtil
+    except ImportError:
+        logger.warning("GPUtil未安装，使用nvidia-smi替代")
+        GPUtil = None
 except ImportError as e:
     logging.error(f"导入失败: {e}")
     raise
@@ -49,13 +53,30 @@ except ImportError as e:
 def check_gpu_usage():
     """检查GPU使用情况"""
     try:
-        gpus = GPUtil.getGPUs()
-        if gpus:
-            gpu = gpus[0]
-            logger.info(f"🔥 GPU状态: 利用率{gpu.load*100:.0f}%, 显存{gpu.memoryUsed/1024:.1f}/{gpu.memoryTotal/1024:.1f}GB, 温度{gpu.temperature}°C")
-            return gpu.memoryTotal / 1024, gpu.memoryUsed / 1024
+        if GPUtil:
+            # 使用GPUtil
+            gpus = GPUtil.getGPUs()
+            if gpus:
+                gpu = gpus[0]
+                logger.info(f"🔥 GPU状态: 利用率{gpu.load*100:.0f}%, 显存{gpu.memoryUsed/1024:.1f}/{gpu.memoryTotal/1024:.1f}GB, 温度{gpu.temperature}°C")
+                return gpu.memoryTotal / 1024, gpu.memoryUsed / 1024
+            else:
+                logger.warning("⚠️ 未检测到GPU")
+                return None, None
         else:
-            logger.warning("⚠️ 未检测到GPU")
+            # 使用nvidia-smi替代
+            result = subprocess.run(['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu', '--format=csv,noheader,nounits'], 
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                gpu_info = result.stdout.strip().split(', ')
+                if len(gpu_info) >= 4:
+                    util = gpu_info[0]
+                    mem_used = float(gpu_info[1]) / 1024  # MB to GB
+                    mem_total = float(gpu_info[2]) / 1024  # MB to GB
+                    temp = gpu_info[3]
+                    logger.info(f"🔥 GPU状态: 利用率{util}%, 显存{mem_used:.1f}/{mem_total:.1f}GB, 温度{temp}°C")
+                    return mem_total, mem_used
+            logger.warning("⚠️ 无法获取GPU信息")
             return None, None
     except Exception as e:
         logger.error(f"❌ GPU检查失败: {e}")

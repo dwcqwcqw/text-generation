@@ -1,0 +1,52 @@
+# 强制x86_64架构的CUDA基础镜像
+FROM --platform=linux/amd64 nvidia/cuda:12.1-base-ubuntu22.04
+
+# 设置环境变量
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CUDA_VISIBLE_DEVICES=0
+ENV GGML_CUDA=1
+ENV LLAMA_CUBLAS=1
+ENV CMAKE_CUDA_ARCHITECTURES="75;80;86;89"
+ENV FORCE_CMAKE=1
+ENV CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89"
+ENV ARCHFLAGS="-arch x86_64"
+ENV CFLAGS="-march=x86-64"
+ENV CXXFLAGS="-march=x86-64"
+ENV NVCC_APPEND_FLAGS="--allow-unsupported-compiler"
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    python3 python3-pip python3-dev \
+    build-essential cmake \
+    nvidia-cuda-toolkit \
+    && rm -rf /var/lib/apt/lists/*
+
+# 升级pip
+RUN python3 -m pip install --upgrade pip
+
+# 安装基础Python包
+RUN pip install --no-cache-dir \
+    GPUtil \
+    runpod
+
+# 安装CUDA版本的llama-cpp-python
+RUN pip install --no-cache-dir \
+    llama-cpp-python \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+
+# 复制依赖安装脚本
+COPY install_dependencies.py /app/install_dependencies.py
+
+# 复制handler
+COPY handler_llama_ai.py /app/handler.py
+WORKDIR /app
+
+# 运行依赖检查和安装
+RUN python3 install_dependencies.py
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python3 -c "import llama_cpp; import GPUtil; print('OK')" || exit 1
+
+# 启动命令
+CMD ["python3", "-u", "handler.py"] 
