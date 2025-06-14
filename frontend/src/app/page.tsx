@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Send, Bot, User, Search, Plus, ChevronDown, MessageSquare, RefreshCw, Settings } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
-// 强制更新 - 只显示两个模型：L3.2-8X3B.gguf 和 L3.2-8X4B.gguf
+// 强制更新版本 v2.0 - 确保只显示两个GGUF模型，清除所有缓存
 
 interface Message {
   id: string
@@ -29,32 +29,48 @@ interface Model {
   parameters: string
 }
 
-// 只显示两个实际的GGUF模型
-const models: Model[] = [
+// 强制定义：只有这两个模型，没有其他任何模型！
+const MODELS_V2: Model[] = [
   {
     id: 'L3.2-8X3B',
     name: 'L3.2-8X3B.gguf',
-    description: '18.4B参数，适合复杂对话',
+    description: '18.4B参数模型',
     parameters: '/runpod-volume/text_models/L3.2-8X3B.gguf'
   },
   {
     id: 'L3.2-8X4B',
-    name: 'L3.2-8X4B.gguf',
-    description: '21B参数，更快响应',
+    name: 'L3.2-8X4B.gguf', 
+    description: '21B参数模型',
     parameters: '/runpod-volume/text_models/L3.2-8X4B.gguf'
   }
 ]
+
+// 确保没有其他模型定义
+const models = MODELS_V2
 
 export default function ChatPage() {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null)
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedModel, setSelectedModel] = useState(models[0])
+  const [selectedModel, setSelectedModel] = useState(MODELS_V2[0]) // 强制使用MODELS_V2
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredSessions, setFilteredSessions] = useState<ChatSession[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // 强制验证模型数量
+  useEffect(() => {
+    console.log('🔍 模型验证 v2.0:', {
+      modelCount: MODELS_V2.length,
+      models: MODELS_V2.map(m => ({ id: m.id, name: m.name })),
+      selectedModel: selectedModel.id
+    })
+    
+    if (MODELS_V2.length !== 2) {
+      console.error('❌ 模型数量错误！应该只有2个模型')
+    }
+  }, [selectedModel])
 
   // 初始化：创建新对话
   useEffect(() => {
@@ -554,7 +570,7 @@ export default function ChatPage() {
             
             {showModelDropdown && (
               <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-xl z-20">
-                {models.map((model) => (
+                {MODELS_V2.map((model) => (
                   <button
                     key={model.id}
                     onClick={() => {
@@ -651,7 +667,7 @@ export default function ChatPage() {
                     }`}>
                       {message.timestamp.toLocaleTimeString()}
                       {message.model && (
-                        <span className="ml-2">• {models.find(m => m.id === message.model)?.name}</span>
+                        <span className="ml-2">• {MODELS_V2.find(m => m.id === message.model)?.name}</span>
                       )}
                     </div>
                   </div>
