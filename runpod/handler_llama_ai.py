@@ -29,7 +29,7 @@ model_path = None
 # 强制设置CUDA环境变量
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 os.environ['GGML_CUDA'] = '1'
-os.environ['LLAMA_CUBLAS'] = '1'
+    # LLAMA_CUBLAS已弃用，使用GGML_CUDA
 os.environ['CMAKE_CUDA_ARCHITECTURES'] = '75;80;86;89'  # 支持多种GPU架构
 os.environ['FORCE_CMAKE'] = '1'
 os.environ['CMAKE_ARGS'] = '-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89'

@@ -11,8 +11,7 @@ ENV GGML_CUDA=1
 ENV CUDA_VISIBLE_DEVICES=0
 ENV FORCE_CMAKE=1
 ENV CMAKE_CUDA_ARCHITECTURES="75;80;86;89"
-ENV LLAMA_CUBLAS=1
-ENV CMAKE_ARGS="-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89"
+ENV CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89"
 
 # 基础系统更新和依赖安装
 RUN apt-get update && apt-get install -y \
@@ -43,7 +42,7 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 # 强制重装GPU版本的llama-cpp-python
 RUN pip3 uninstall -y llama-cpp-python || true
-RUN CMAKE_ARGS="-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89" \
+RUN CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89" \
     FORCE_CMAKE=1 \
     pip3 install llama-cpp-python --upgrade --no-cache-dir --force-reinstall \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121

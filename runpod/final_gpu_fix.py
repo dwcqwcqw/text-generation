@@ -44,7 +44,6 @@ def setup_cuda_environment():
     cuda_env = {
         'CUDA_VISIBLE_DEVICES': '0',
         'GGML_CUDA': '1',
-        'LLAMA_CUBLAS': '1',
         'CMAKE_CUDA_ARCHITECTURES': '75;80;86;89',
         'FORCE_CMAKE': '1',
         'CMAKE_ARGS': '-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89',
