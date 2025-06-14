@@ -1,2 +1,2 @@
-# 最简化的RunPod Requirements
-runpod 
+# RunPod Requirements - 使用最新稳定版本
+runpod>=1.6.0 
