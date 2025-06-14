@@ -136,39 +136,123 @@ def call_local_llm(prompt: str, max_tokens: int = 1000, temperature: float = 0.7
         AI生成的回复
     """
     
-    # 这里需要根据你的实际LLM服务配置
-    # 可能的选项：
-    # 1. llama.cpp server (http://localhost:8080)
-    # 2. text-generation-webui API
-    # 3. vLLM server
-    # 4. 其他本地LLM服务
-    
-    try:
-        # 示例：调用llama.cpp server
-        api_url = "http://localhost:8080/completion"
-        
-        payload = {
-            "prompt": prompt,
-            "n_predict": max_tokens,
-            "temperature": temperature,
-            "top_p": 0.9,
-            "top_k": 40,
-            "repeat_penalty": 1.1,
-            "stop": ["<|eot_id|>", "<|end_of_text|>"]
+    # 可能的LLM服务端点列表
+    llm_endpoints = [
+        {
+            "name": "llama.cpp server",
+            "url": "http://localhost:8080/completion",
+            "format": "llamacpp"
+        },
+        {
+            "name": "text-generation-webui",
+            "url": "http://localhost:5000/api/v1/generate",
+            "format": "textgen"
+        },
+        {
+            "name": "vLLM server",
+            "url": "http://localhost:8000/v1/completions",
+            "format": "openai"
+        },
+        {
+            "name": "Ollama",
+            "url": "http://localhost:11434/api/generate",
+            "format": "ollama"
         }
-        
-        response = requests.post(api_url, json=payload, timeout=60)
-        
-        if response.status_code == 200:
-            result = response.json()
-            return result.get("content", "").strip()
-        else:
-            return f"API Error: {response.status_code} - {response.text}"
+    ]
+    
+    print(f"🔍 Attempting to connect to local LLM services...")
+    
+    for endpoint in llm_endpoints:
+        try:
+            print(f"📡 Trying {endpoint['name']} at {endpoint['url']}")
             
-    except requests.exceptions.RequestException as e:
-        return f"Connection Error: {str(e)}"
-    except Exception as e:
-        return f"LLM Error: {str(e)}"
+            # 根据不同服务格式化请求
+            if endpoint['format'] == 'llamacpp':
+                payload = {
+                    "prompt": prompt,
+                    "n_predict": max_tokens,
+                    "temperature": temperature,
+                    "top_p": 0.9,
+                    "top_k": 40,
+                    "repeat_penalty": 1.1,
+                    "stop": ["<|eot_id|>", "<|end_of_text|>"]
+                }
+            elif endpoint['format'] == 'textgen':
+                payload = {
+                    "prompt": prompt,
+                    "max_new_tokens": max_tokens,
+                    "temperature": temperature,
+                    "top_p": 0.9,
+                    "top_k": 40,
+                    "repetition_penalty": 1.1,
+                    "stopping_strings": ["<|eot_id|>", "<|end_of_text|>"]
+                }
+            elif endpoint['format'] == 'openai':
+                payload = {
+                    "model": "llama-3.2-8x3b-moe",
+                    "prompt": prompt,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "top_p": 0.9,
+                    "stop": ["<|eot_id|>", "<|end_of_text|>"]
+                }
+            elif endpoint['format'] == 'ollama':
+                payload = {
+                    "model": "llama3.2",
+                    "prompt": prompt,
+                    "options": {
+                        "num_predict": max_tokens,
+                        "temperature": temperature,
+                        "top_p": 0.9,
+                        "top_k": 40,
+                        "repeat_penalty": 1.1
+                    },
+                    "stream": False
+                }
+            
+            print(f"📤 Sending request to {endpoint['name']} with payload size: {len(str(payload))} bytes")
+            
+            # 发送请求
+            response = requests.post(endpoint['url'], json=payload, timeout=10)
+            
+            print(f"📥 Response from {endpoint['name']}: Status {response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"✅ Successfully connected to {endpoint['name']}")
+                print(f"📊 Response keys: {list(result.keys())}")
+                
+                # 根据不同服务解析响应
+                if endpoint['format'] == 'llamacpp':
+                    content = result.get("content", "").strip()
+                elif endpoint['format'] == 'textgen':
+                    content = result.get("results", [{}])[0].get("text", "").strip()
+                elif endpoint['format'] == 'openai':
+                    content = result.get("choices", [{}])[0].get("text", "").strip()
+                elif endpoint['format'] == 'ollama':
+                    content = result.get("response", "").strip()
+                else:
+                    content = str(result)
+                
+                if content:
+                    print(f"🎯 Generated content length: {len(content)} characters")
+                    return content
+                else:
+                    print(f"⚠️ Empty response from {endpoint['name']}")
+            else:
+                print(f"❌ HTTP Error {response.status_code} from {endpoint['name']}: {response.text[:200]}")
+                
+        except requests.exceptions.ConnectionError as e:
+            print(f"🔌 Connection failed to {endpoint['name']}: Service not running")
+        except requests.exceptions.Timeout as e:
+            print(f"⏰ Timeout connecting to {endpoint['name']}: {str(e)}")
+        except requests.exceptions.RequestException as e:
+            print(f"🌐 Request error to {endpoint['name']}: {str(e)}")
+        except Exception as e:
+            print(f"💥 Unexpected error with {endpoint['name']}: {str(e)}")
+    
+    print(f"❌ All LLM services unavailable. Checked {len(llm_endpoints)} endpoints.")
+    return "LLM_SERVICE_UNAVAILABLE"
 
 def simulate_ai_response(prompt: str, system_template: str = "default") -> str:
     """
@@ -253,16 +337,35 @@ def handler(job):
         print(f"🔧 Formatted prompt length: {len(formatted_prompt)} characters")
         
         # 尝试调用真实LLM，如果失败则使用模拟回复
+        print(f"🤖 Attempting to load and use local LLM model...")
+        print(f"🎯 Target model: Llama 3.2 8X3B MOE Dark Champion")
+        print(f"📍 Expected model path: /models/ or similar")
+        print(f"🔧 Formatted prompt preview: {formatted_prompt[:200]}...")
+        
         try:
             ai_response = call_local_llm(formatted_prompt, max_tokens, temperature)
             
-            # 如果回复包含错误信息，使用模拟回复
-            if "Error:" in ai_response or "Connection Error:" in ai_response:
-                print(f"⚠️ LLM service unavailable, using simulated response")
+            # 检查是否成功获得LLM响应
+            if ai_response == "LLM_SERVICE_UNAVAILABLE":
+                print(f"❌ No local LLM service found - all endpoints failed")
+                print(f"💡 To use real AI, you need to:")
+                print(f"   1. Install and run llama.cpp server on port 8080")
+                print(f"   2. Or install text-generation-webui on port 5000")
+                print(f"   3. Or install vLLM server on port 8000")
+                print(f"   4. Or install Ollama on port 11434")
+                print(f"🔄 Falling back to simulated AI response")
                 ai_response = simulate_ai_response(prompt, system_template)
+            elif "Error:" in ai_response or "Connection Error:" in ai_response:
+                print(f"⚠️ LLM service error: {ai_response}")
+                print(f"🔄 Falling back to simulated AI response")
+                ai_response = simulate_ai_response(prompt, system_template)
+            else:
+                print(f"✅ Successfully generated response using local LLM")
+                print(f"📏 Response length: {len(ai_response)} characters")
                 
         except Exception as e:
-            print(f"⚠️ LLM call failed: {str(e)}, using simulated response")
+            print(f"💥 Unexpected error during LLM call: {str(e)}")
+            print(f"🔄 Falling back to simulated AI response")
             ai_response = simulate_ai_response(prompt, system_template)
         
         print(f"✅ Generated response: '{ai_response[:100]}{'...' if len(ai_response) > 100 else ''}'")
@@ -277,6 +380,46 @@ def handler(job):
         log_gpu_status()
         return f"I apologize, but I encountered an error while processing your request: {error_msg}"
 
+def check_llm_services():
+    """检查可用的LLM服务"""
+    print("\n🔍 Checking for available LLM services...")
+    
+    services = [
+        ("llama.cpp server", "http://localhost:8080/health"),
+        ("text-generation-webui", "http://localhost:5000/api/v1/model"),
+        ("vLLM server", "http://localhost:8000/health"),
+        ("Ollama", "http://localhost:11434/api/tags")
+    ]
+    
+    available_services = []
+    
+    for service_name, health_url in services:
+        try:
+            response = requests.get(health_url, timeout=2)
+            if response.status_code == 200:
+                print(f"✅ {service_name} is running and accessible")
+                available_services.append(service_name)
+            else:
+                print(f"⚠️ {service_name} responded with status {response.status_code}")
+        except requests.exceptions.ConnectionError:
+            print(f"❌ {service_name} is not running (connection refused)")
+        except requests.exceptions.Timeout:
+            print(f"⏰ {service_name} timeout (may be starting up)")
+        except Exception as e:
+            print(f"💥 {service_name} check failed: {str(e)}")
+    
+    if available_services:
+        print(f"🎉 Found {len(available_services)} available LLM service(s): {', '.join(available_services)}")
+    else:
+        print("⚠️ No LLM services detected - will use simulated responses")
+        print("💡 To enable real AI responses, install one of:")
+        print("   • llama.cpp with server mode")
+        print("   • text-generation-webui")
+        print("   • vLLM")
+        print("   • Ollama")
+    
+    return available_services
+
 # 启动RunPod serverless
 if __name__ == "__main__":
     print("=== RunPod AI Handler Starting ===")
@@ -288,10 +431,16 @@ if __name__ == "__main__":
     for template_name, template_desc in SYSTEM_TEMPLATES.items():
         print(f"  - {template_name}: {template_desc[:80]}{'...' if len(template_desc) > 80 else ''}")
     
+    # 检查LLM服务
+    available_llm_services = check_llm_services()
+    
     start_gpu_monitoring()
     
     print("\n🔍 Initial GPU Status:")
     log_gpu_status()
     
-    print("🚀 Starting RunPod AI serverless...")
+    print(f"\n🚀 Starting RunPod AI serverless...")
+    print(f"🎯 LLM Services Available: {len(available_llm_services)}")
+    print(f"🔧 Handler Mode: {'Real AI' if available_llm_services else 'Simulated AI'}")
+    
     runpod.serverless.start({"handler": handler}) 
