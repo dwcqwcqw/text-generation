@@ -1,0 +1,129 @@
+# RTX 4090专用Dockerfile - 针对Ada Lovelace架构(计算能力8.9)优化
+FROM nvidia/cuda:12.3-devel-ubuntu22.04
+
+# 防止时区配置交互
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# RTX 4090专用环境变量
+ENV GGML_CUDA=1
+ENV CUDA_VISIBLE_DEVICES=0
+ENV CMAKE_CUDA_ARCHITECTURES=89
+ENV NVCC_APPEND_FLAGS="--allow-unsupported-compiler"
+ENV CUDA_LAUNCH_BLOCKING=1
+
+# 基础系统更新和依赖安装
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    cmake \
+    git \
+    wget \
+    curl \
+    ninja-build \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装Python依赖
+RUN pip3 install --no-cache-dir \
+    runpod \
+    psutil \
+    requests \
+    numpy
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制RTX 4090修复脚本
+COPY fix_cuda_rtx4090.py /app/
+COPY handler_rtx4090.py /app/handler.py
+
+# 设置RTX 4090专用权限
+RUN chmod +x /app/fix_cuda_rtx4090.py
+
+# 运行RTX 4090 CUDA修复
+RUN python3 /app/fix_cuda_rtx4090.py
+
+# 创建模型目录
+RUN mkdir -p /runpod-volume/text_models
+
+# RTX 4090健康检查
+COPY <<EOF /app/rtx4090_health_check.py
+#!/usr/bin/env python3
+import sys
+import subprocess
+
+def check_rtx4090():
+    try:
+        # 检查CUDA
+        result = subprocess.run(['nvidia-smi'], capture_output=True, text=True)
+        if result.returncode != 0:
+            print("❌ NVIDIA驱动检查失败")
+            return False
+            
+        # 检查GPU型号
+        gpu_result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'], 
+                                  capture_output=True, text=True)
+        if gpu_result.returncode == 0:
+            gpu_name = gpu_result.stdout.strip()
+            print(f"🎯 检测到GPU: {gpu_name}")
+            
+            if "4090" in gpu_name:
+                print("✅ 确认RTX 4090")
+            else:
+                print("⚠️ 非RTX 4090，但可以运行")
+        
+        # 检查llama-cpp-python
+        import llama_cpp
+        print(f"✅ llama-cpp-python: {llama_cpp.__version__}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ RTX 4090检查失败: {e}")
+        return False
+
+if __name__ == "__main__":
+    success = check_rtx4090()
+    sys.exit(0 if success else 1)
+EOF
+
+RUN chmod +x /app/rtx4090_health_check.py
+
+# 运行RTX 4090健康检查
+RUN python3 /app/rtx4090_health_check.py
+
+# 设置RTX 4090启动脚本
+COPY <<EOF /app/start_rtx4090.sh
+#!/bin/bash
+set -e
+
+echo "🚀 启动RTX 4090专用服务"
+echo "📊 GPU信息:"
+nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv
+
+echo "📊 环境变量:"
+echo "GGML_CUDA: $GGML_CUDA"
+echo "CMAKE_CUDA_ARCHITECTURES: $CMAKE_CUDA_ARCHITECTURES"
+
+echo "🧪 验证llama-cpp-python CUDA支持:"
+python3 -c "
+import llama_cpp
+print('✅ llama-cpp-python可用')
+print(f'版本: {llama_cpp.__version__}')
+"
+
+echo "🚀 启动RTX 4090 Handler"
+exec python3 /app/handler.py
+EOF
+
+RUN chmod +x /app/start_rtx4090.sh
+
+# RTX 4090专用端口
+EXPOSE 8000
+
+# 启动RTX 4090服务
+CMD ["/app/start_rtx4090.sh"] 
