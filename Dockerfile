@@ -25,4 +25,4 @@ COPY runpod/handler_v1711.py ./handler.py
 EXPOSE 8000
 
 # 启动命令 - 直接运行handler文件
-CMD ["python", "handler.py"] 
+CMD ["python", "handler_llama_ai.py"] 

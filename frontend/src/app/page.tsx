@@ -29,16 +29,40 @@ interface Model {
 
 const models: Model[] = [
   {
-    id: 'L3.2-8X3B',
-    name: 'Llama-3.2-8X3B',
-    description: 'Dark Champion Instruct MOE (18.4B parameters)',
-    parameters: '18.4B'
+    id: 'llama-default',
+    name: 'AI Assistant (Default)',
+    description: 'Helpful, intelligent AI assistant for general conversations',
+    parameters: 'Llama 3.2 MOE 18.4B'
   },
   {
-    id: 'L3.2-8X4B',
-    name: 'Llama-3.2-8X4B',
-    description: 'Dark Champion Instruct V2 MOE (21B parameters)',
-    parameters: '21B'
+    id: 'llama-creative',
+    name: 'Creative Writer',
+    description: 'Specialized in creative writing, storytelling, and fiction',
+    parameters: 'Llama 3.2 MOE 18.4B'
+  },
+  {
+    id: 'llama-professional',
+    name: 'Professional Assistant',
+    description: 'Formal, structured responses for business and analysis',
+    parameters: 'Llama 3.2 MOE 18.4B'
+  },
+  {
+    id: 'llama-casual',
+    name: 'Casual Chat',
+    description: 'Friendly, relaxed conversational style',
+    parameters: 'Llama 3.2 MOE 18.4B'
+  },
+  {
+    id: 'llama-technical',
+    name: 'Technical Expert',
+    description: 'Programming, technology, and engineering expertise',
+    parameters: 'Llama 3.2 MOE 18.4B'
+  },
+  {
+    id: 'llama-chinese',
+    name: '中文助手',
+    description: '专业的中文AI助手，理解中文文化背景',
+    parameters: 'Llama 3.2 MOE 18.4B'
   }
 ]
 
@@ -224,10 +248,34 @@ export default function ChatPage() {
       // 首先尝试RunPod API调用（如果有API Key）
       if (FINAL_API_KEY) {
         try {
-          // 使用简化的请求格式，匹配我们的echo handler
+          // 准备对话历史
+          const conversationHistory = history.map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+          
+          // 根据选择的模型确定系统模版
+          let systemTemplate = 'default'
+          if (selectedModel.id === 'llama-creative') {
+            systemTemplate = 'creative'
+          } else if (selectedModel.id === 'llama-chinese') {
+            systemTemplate = 'chinese'
+          } else if (selectedModel.id === 'llama-technical') {
+            systemTemplate = 'technical'
+          } else if (selectedModel.id === 'llama-professional') {
+            systemTemplate = 'professional'
+          } else if (selectedModel.id === 'llama-casual') {
+            systemTemplate = 'casual'
+          }
+          
+          // 使用新的AI handler格式
           const requestPayload = {
             input: {
-              prompt: userInput  // 直接使用用户输入，不需要复杂的Llama格式
+              prompt: userInput,
+              system_template: systemTemplate,
+              history: conversationHistory,
+              max_tokens: 1000,
+              temperature: 0.7
             }
           }
           
