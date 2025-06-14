@@ -168,8 +168,11 @@ export default function ChatPage() {
   const generateResponse = async (userInput: string, history: Message[] = []) => {
     setIsLoading(true)
 
-    // RunPod API 配置 - 直接使用完整的API Key
+    // RunPod API 配置 - 直接使用完整的API Key (强制部署更新)
     const RUNPOD_API_KEY = 'rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb'
+    
+    // 调试：确认API Key被正确设置
+    console.log('🔑 RUNPOD_API_KEY直接设置为:', RUNPOD_API_KEY ? `${RUNPOD_API_KEY.substring(0, 15)}...` : 'NULL')
     
     const RUNPOD_ENDPOINT_ID = process.env.NEXT_PUBLIC_RUNPOD_ENDPOINT_ID || 
                               process.env.RUNPOD_ENDPOINT_ID || 
