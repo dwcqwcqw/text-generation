@@ -26,9 +26,22 @@ model_path = None
 # GPU monitoring thread
 gpu_monitor_active = False
 
+def check_environment():
+    """Check CUDA environment variables"""
+    cuda_vars = {
+        'CUDA_VISIBLE_DEVICES': os.environ.get('CUDA_VISIBLE_DEVICES', 'Not set'),
+        'LLAMA_CUBLAS': os.environ.get('LLAMA_CUBLAS', 'Not set'),
+        'CMAKE_ARGS': os.environ.get('CMAKE_ARGS', 'Not set'),
+    }
+    
+    for var, value in cuda_vars.items():
+        logger.info(f"Environment {var}: {value}")
+
 def check_gpu():
     """Check GPU availability and CUDA support"""
     try:
+        # Check environment first
+        check_environment()
         # Check nvidia-smi first
         try:
             result = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total', '--format=csv,noheader'], 
@@ -117,8 +130,23 @@ def load_gguf_model(model_path: str, use_gpu: bool = True):
         try:
             import llama_cpp
             logger.info(f"llama-cpp-python version: {llama_cpp.__version__}")
-        except:
-            logger.warning("Could not get llama-cpp-python version")
+            
+            # Check for CUDA support
+            try:
+                # Try to create a test model to check CUDA availability
+                test_model = llama_cpp.Llama(
+                    model_path=model_path,
+                    n_ctx=32,
+                    n_gpu_layers=1,
+                    verbose=False
+                )
+                test_model = None  # Clean up
+                logger.info("CUDA support detected in llama-cpp-python")
+            except Exception as cuda_test_error:
+                logger.warning(f"CUDA test failed: {cuda_test_error}")
+                
+        except Exception as e:
+            logger.warning(f"Could not check llama-cpp-python: {e}")
         
         # GPU settings - force GPU usage if available
         if use_gpu:

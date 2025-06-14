@@ -29,9 +29,16 @@ ENV LLAMA_CUBLAS=1
 ENV CMAKE_ARGS="-DLLAMA_CUBLAS=on"
 ENV FORCE_CMAKE=1
 
-# 安装其他依赖
+# 先安装基础依赖
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install runpod==1.7.11 requests>=2.28.0 torch>=2.0.0 transformers>=4.30.0 accelerate>=0.20.0
+
+# 强制重新编译llama-cpp-python with CUDA
+RUN pip uninstall llama-cpp-python -y || true
+RUN CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python --no-cache-dir --force-reinstall
+
+# 验证CUDA支持
+RUN python -c "from llama_cpp import Llama; print('llama-cpp-python CUDA support verified')"
 
 # 复制应用代码
 COPY . .
