@@ -5,13 +5,9 @@ FROM --platform=linux/amd64 nvidia/cuda:12.1.1-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
 
-# 强制x86_64架构和GPU环境变量
-ENV ARCHFLAGS="-arch x86_64"
+# GPU环境变量
 ENV GGML_CUDA=1
 ENV CUDA_VISIBLE_DEVICES=0
-ENV FORCE_CMAKE=1
-ENV CMAKE_CUDA_ARCHITECTURES="75;80;86;89"
-ENV CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89"
 
 # 基础系统更新和依赖安装
 RUN apt-get update && apt-get install -y \
@@ -40,12 +36,10 @@ COPY runpod/requirements.txt .
 # 安装Python依赖
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# 强制重装GPU版本的llama-cpp-python
-RUN pip3 uninstall -y llama-cpp-python || true
-RUN CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89" \
-    FORCE_CMAKE=1 \
-    pip3 install llama-cpp-python --upgrade --no-cache-dir --force-reinstall \
-    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+# 安装预编译的GPU版本llama-cpp-python
+RUN pip3 install --no-cache-dir \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121 \
+    llama-cpp-python
 
 # 复制所有必要文件
 COPY runpod/handler_llama_ai.py ./handler_llama_ai.py
