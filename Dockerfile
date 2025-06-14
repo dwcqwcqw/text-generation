@@ -19,7 +19,7 @@ COPY runpod/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制handler
-COPY runpod/handler_v1711.py ./handler.py
+COPY runpod/handler_llama_ai.py ./handler_llama_ai.py
 
 # 暴露端口
 EXPOSE 8000
