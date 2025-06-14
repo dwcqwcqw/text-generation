@@ -19,10 +19,10 @@ COPY runpod/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制handler
-COPY runpod/handler.py .
+COPY runpod/handler_v1711.py ./handler.py
 
 # 暴露端口
 EXPOSE 8000
 
-# 启动命令
-CMD ["python", "-m", "runpod.serverless.start", "--handler_file", "handler.py"] 
+# 启动命令 - 直接运行handler文件
+CMD ["python", "handler.py"] 
