@@ -99,7 +99,7 @@ def reinstall_llama_cpp_python():
         cmd = [
             sys.executable, '-m', 'pip', 'install', 
             'llama-cpp-python', '--upgrade', '--no-cache-dir', '--force-reinstall',
-            '--extra-index-url', 'https://abetlen.github.io/llama-cpp-python/whl/cu121'
+            '--extra-index-url', 'https://abetlen.github.io/llama-cpp-python/whl/cu118'
         ]
         
         result = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=600)

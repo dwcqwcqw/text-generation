@@ -1,5 +1,5 @@
 # 强制x86_64架构GPU优化Dockerfile - 解决CPU_AARCH64问题
-FROM --platform=linux/amd64 nvidia/cuda:12.1-devel-ubuntu22.04
+FROM --platform=linux/amd64 nvidia/cuda:11.8-devel-ubuntu22.04
 
 # 防止时区配置交互
 ENV DEBIAN_FRONTEND=noninteractive
@@ -46,7 +46,7 @@ RUN pip3 uninstall -y llama-cpp-python || true
 RUN CMAKE_ARGS="-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89" \
     FORCE_CMAKE=1 \
     pip3 install llama-cpp-python --upgrade --no-cache-dir --force-reinstall \
-    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu118
 
 # 复制所有必要文件
 COPY runpod/handler_llama_ai.py ./handler_llama_ai.py
