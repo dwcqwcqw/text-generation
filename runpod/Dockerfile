@@ -23,22 +23,22 @@ RUN pip install runpod>=1.6.0
 # 验证runpod安装
 RUN python -c "import runpod; from runpod.serverless import start; print('RunPod安装成功')"
 
-# 设置CUDA环境变量用于llama-cpp-python
+# 设置CUDA环境变量用于llama-cpp-python (L4 GPU是计算能力8.9)
 ENV CUDA_VISIBLE_DEVICES=0
 ENV LLAMA_CUBLAS=1
-ENV CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+ENV CMAKE_ARGS="-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=89"
 ENV FORCE_CMAKE=1
 
 # 先安装基础依赖
 COPY requirements.txt .
 RUN pip install runpod==1.7.11 requests>=2.28.0 torch>=2.0.0 transformers>=4.30.0 accelerate>=0.20.0
 
-# 强制重新编译llama-cpp-python with CUDA
+# 强制重新编译llama-cpp-python with CUDA for L4 GPU (compute capability 8.9)
 RUN pip uninstall llama-cpp-python -y || true
-RUN CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install llama-cpp-python --no-cache-dir --force-reinstall
+RUN CMAKE_ARGS="-DLLAMA_CUBLAS=on -DCMAKE_CUDA_ARCHITECTURES=89" FORCE_CMAKE=1 pip install llama-cpp-python --no-cache-dir --force-reinstall
 
 # 验证CUDA支持
-RUN python -c "from llama_cpp import Llama; print('llama-cpp-python CUDA support verified')"
+RUN python -c "from llama_cpp import Llama; print('llama-cpp-python CUDA support verified for L4 GPU')"
 
 # 复制应用代码
 COPY . .

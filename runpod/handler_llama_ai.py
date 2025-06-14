@@ -122,7 +122,7 @@ def discover_models():
     return available_models
 
 def load_gguf_model(model_path: str, use_gpu: bool = True):
-    """Load GGUF model using llama-cpp-python with GPU support"""
+    """Load GGUF model using llama-cpp-python with L4 GPU support"""
     try:
         from llama_cpp import Llama
         import llama_cpp
@@ -130,26 +130,46 @@ def load_gguf_model(model_path: str, use_gpu: bool = True):
         logger.info(f"llama-cpp-python version: {llama_cpp.__version__}")
         logger.info(f"Loading GGUF model from {model_path}")
         
-        # Start with CPU-only to avoid crashes
-        logger.info("Starting with CPU-only loading to ensure stability...")
+        if use_gpu:
+            # L4 GPU optimized settings
+            logger.info("Loading with L4 GPU optimization (compute capability 8.9)...")
+            n_gpu_layers = 30  # Conservative for L4 GPU
+            n_ctx = 2048
+            n_batch = 256
+        else:
+            logger.info("Loading on CPU...")
+            n_gpu_layers = 0
+            n_ctx = 512
+            n_batch = 64
+        
+        logger.info(f"GPU layers: {n_gpu_layers}, Context: {n_ctx}, Batch: {n_batch}")
         
         model = Llama(
             model_path=model_path,
-            n_ctx=512,  # Very small context
-            n_batch=32,  # Very small batch
-            n_gpu_layers=0,  # CPU only for now
-            verbose=False,
-            n_threads=1,
+            n_ctx=n_ctx,
+            n_batch=n_batch,
+            n_gpu_layers=n_gpu_layers,
+            verbose=False,  # Reduce verbose output
+            n_threads=1 if use_gpu else 2,
             use_mmap=True,
             use_mlock=False,
+            f16_kv=True if use_gpu else False,
         )
         
-        logger.info("GGUF model loaded successfully on CPU")
+        if use_gpu:
+            logger.info("GGUF model loaded successfully with L4 GPU acceleration")
+        else:
+            logger.info("GGUF model loaded successfully on CPU")
         return model, "gguf"
         
     except Exception as e:
-        logger.error(f"Model loading failed: {e}")
-        return None, None
+        logger.error(f"GPU loading failed: {e}")
+        if use_gpu:
+            logger.info("Attempting CPU fallback...")
+            return load_gguf_model(model_path, False)  # Recursive CPU fallback
+        else:
+            logger.error(f"CPU loading also failed: {e}")
+            return None, None
 
 def load_transformers_model(model_path: str, use_gpu: bool = True):
     """Load model using transformers library with GPU support"""
@@ -179,13 +199,17 @@ def load_transformers_model(model_path: str, use_gpu: bool = True):
         return None, None, None
 
 def initialize_model():
-    """Initialize the best available model with CPU-only for stability"""
+    """Initialize the best available model with L4 GPU support"""
     global model, tokenizer, model_type, model_path
     
-    logger.info("Starting simplified model initialization...")
+    logger.info("Starting model initialization with L4 GPU support...")
     
-    # Skip GPU checks for now to avoid crashes
-    logger.info("Skipping GPU checks, using CPU-only mode for stability")
+    # Check GPU availability
+    gpu_available, gpu_count, gpu_name = check_gpu()
+    logger.info(f"GPU Status: Available={gpu_available}, Count={gpu_count}, Name={gpu_name}")
+    
+    # Start GPU monitoring
+    start_gpu_monitoring()
     
     # Discover available models
     available_models = discover_models()
@@ -198,11 +222,11 @@ def initialize_model():
     for model_path_candidate, size in available_models:
         logger.info(f"Attempting to load model: {model_path_candidate} ({size:.1f}GB)")
         
-        # Only try GGUF for now
+        # Try GGUF first (more efficient)
         if model_path_candidate.endswith('.gguf'):
             try:
-                logger.info("Loading GGUF model in CPU-only mode...")
-                loaded_model, loaded_type = load_gguf_model(model_path_candidate, False)  # Force CPU
+                logger.info("Loading GGUF model with L4 GPU support...")
+                loaded_model, loaded_type = load_gguf_model(model_path_candidate, gpu_available)
                 if loaded_model:
                     model = loaded_model
                     model_type = loaded_type
