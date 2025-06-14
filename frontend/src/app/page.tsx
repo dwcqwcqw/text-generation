@@ -199,11 +199,12 @@ export default function ChatPage() {
       'finalEndpointId': RUNPOD_ENDPOINT_ID
     })
     
-          // 从localStorage或者其他安全方式获取API Key
-      const FALLBACK_API_KEY = localStorage.getItem('runpod_api_key') || ''
-      const FINAL_API_KEY = RUNPOD_API_KEY || FALLBACK_API_KEY
+          // 直接使用硬编码的API Key，不依赖localStorage
+      const FINAL_API_KEY = RUNPOD_API_KEY
     
     console.log('Using API Key:', FINAL_API_KEY ? `${FINAL_API_KEY.substring(0, 10)}...` : 'NONE')
+    console.log('🔍 API Key Length:', FINAL_API_KEY ? FINAL_API_KEY.length : 0)
+    console.log('🔍 API Key Type:', typeof FINAL_API_KEY)
     
           // 如果没有配置API Key，直接使用模拟模式
       if (!FINAL_API_KEY) {
@@ -404,6 +405,41 @@ export default function ChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
+    }
+  }
+
+  const testApiKeyDirect = async () => {
+    console.log('🧪 Direct API Key Test Started')
+    const API_KEY = 'rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb'
+    const ENDPOINT = 'https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync'
+    
+    console.log('🔑 Test API Key:', API_KEY ? `${API_KEY.substring(0, 15)}...` : 'NULL')
+    
+    try {
+      const response = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`
+        },
+        body: JSON.stringify({
+          input: { prompt: 'Direct test from main page' }
+        })
+      })
+      
+      console.log('🧪 Test Response Status:', response.status)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('🧪 Test Response Data:', data)
+        alert(`✅ API Test Success!\nOutput: ${data.output}`)
+      } else {
+        console.log('🧪 Test Error:', await response.text())
+        alert(`❌ API Test Failed: ${response.status}`)
+      }
+    } catch (error) {
+      console.log('🧪 Test Exception:', error)
+      alert(`❌ API Test Exception: ${error}`)
     }
   }
 
@@ -650,8 +686,16 @@ export default function ChatPage() {
               </button>
             </div>
             
-            <div className="mt-3 text-xs text-gray-500 text-center">
-              Using {selectedModel.name} • Press Enter to send, Shift+Enter for new line
+            <div className="mt-3 flex items-center justify-between">
+              <div className="text-xs text-gray-500">
+                Using {selectedModel.name} • Press Enter to send, Shift+Enter for new line
+              </div>
+              <button
+                onClick={testApiKeyDirect}
+                className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
+              >
+                🧪 Test API
+              </button>
             </div>
           </div>
         </div>
