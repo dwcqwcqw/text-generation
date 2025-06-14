@@ -105,11 +105,19 @@ def load_gguf_model(model_path: str):
             logger.info("✅ 模型在CPU模式下成功加载")
             return model, "gguf_cpu"
         
-        # 针对L4 GPU优化的参数
-        # L4 GPU有22.5GB显存，应该足够放置较多的层
-        n_gpu_layers = 30  # 适中的GPU层数
+        # 针对L4/L40 GPU优化的参数
+        # 根据GPU内存调整层数
+        if gpu_memory > 40:  # L40有45GB显存
+            n_gpu_layers = -1  # 全部层放到GPU
+            logger.info(f"检测到大显存GPU ({gpu_memory:.1f}GB)，使用全部GPU层")
+        elif gpu_memory > 20:  # L4有22.5GB显存
+            n_gpu_layers = 25  # 大部分层放到GPU
+            logger.info(f"检测到中等显存GPU ({gpu_memory:.1f}GB)，使用{n_gpu_layers}个GPU层")
+        else:
+            n_gpu_layers = 15  # 较少层放到GPU
+            logger.info(f"检测到小显存GPU ({gpu_memory:.1f}GB)，使用{n_gpu_layers}个GPU层")
         
-        logger.info(f"使用GPU模式，{n_gpu_layers}层在GPU上")
+        logger.info(f"尝试加载模型到GPU，GPU层数: {n_gpu_layers}")
         model = Llama(
             model_path=model_path,
             n_ctx=2048,           # 适中的上下文窗口
@@ -209,11 +217,18 @@ def format_llama_prompt(prompt: str, personality: str = "default") -> str:
     
     # 检查提示词是否已经包含开始标记，避免重复
     if prompt.startswith("<|begin_of_text|>"):
-        logger.warning("提示词已包含开始标记，避免添加重复标记")
+        logger.warning("提示词已包含开始标记，直接返回原提示词")
         return prompt
     
+    # 检查提示词是否已经是完整格式
+    if "<|start_header_id|>" in prompt and "<|end_header_id|>" in prompt:
+        logger.info("提示词已经是完整格式，直接返回")
+        return prompt
+    
+    # 构建完整的提示词格式
     formatted_prompt = f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
     
+    logger.info(f"格式化后的提示词长度: {len(formatted_prompt)}")
     return formatted_prompt
 
 def generate_response(prompt: str, personality: str = "default") -> str:
@@ -227,7 +242,8 @@ def generate_response(prompt: str, personality: str = "default") -> str:
         # 格式化提示词
         formatted_prompt = format_llama_prompt(prompt, personality)
         logger.info(f"生成响应，使用人格: {personality}")
-        logger.info(f"提示词前50个字符: {formatted_prompt[:50]}...")
+        logger.info(f"原始提示词: {prompt[:100]}...")
+        logger.info(f"格式化提示词前100个字符: {formatted_prompt[:100]}...")
         
         # 生成参数
         generation_params = {
@@ -235,20 +251,40 @@ def generate_response(prompt: str, personality: str = "default") -> str:
             "temperature": 0.7,
             "top_p": 0.9,
             "repeat_penalty": 1.1,
-            "stop": ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>"]
+            "stop": ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>"],
+            "echo": False  # 不回显输入
         }
+        
+        logger.info(f"开始生成响应，参数: {generation_params}")
         
         # 生成响应
         start_time = time.time()
         output = model(formatted_prompt, **generation_params)
         elapsed = time.time() - start_time
         
-        # 提取响应文本
-        response_text = output["choices"][0]["text"] if isinstance(output, dict) else output
-        
         logger.info(f"生成完成，耗时: {elapsed:.2f}秒")
-        logger.info(f"响应前50个字符: {response_text[:50]}...")
+        logger.info(f"原始输出类型: {type(output)}")
         
+        # 提取响应文本
+        if isinstance(output, dict):
+            if "choices" in output and len(output["choices"]) > 0:
+                response_text = output["choices"][0].get("text", "")
+            else:
+                response_text = str(output)
+        else:
+            response_text = str(output)
+        
+        logger.info(f"提取的响应文本长度: {len(response_text)}")
+        logger.info(f"响应文本前100个字符: {response_text[:100]}...")
+        
+        # 清理响应文本
+        response_text = response_text.strip()
+        
+        if not response_text:
+            logger.warning("生成的响应为空")
+            return "抱歉，我无法生成有效的响应。请重试。"
+        
+        logger.info(f"最终响应长度: {len(response_text)}")
         return response_text
         
     except Exception as e:
