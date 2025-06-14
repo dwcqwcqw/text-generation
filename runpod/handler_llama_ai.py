@@ -124,52 +124,38 @@ def discover_models():
 def load_gguf_model(model_path: str, use_gpu: bool = True):
     """Load GGUF model using llama-cpp-python with L4 GPU support"""
     try:
+        # Force set environment variables at runtime (Docker ENV not working)
+        import os
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+        os.environ['LLAMA_CUBLAS'] = '1'
+        
         from llama_cpp import Llama
         import llama_cpp
         
         logger.info(f"llama-cpp-python version: {llama_cpp.__version__}")
         logger.info(f"Loading GGUF model from {model_path}")
         
-        if use_gpu:
-            # L4 GPU optimized settings
-            logger.info("Loading with L4 GPU optimization (compute capability 8.9)...")
-            n_gpu_layers = 30  # Conservative for L4 GPU
-            n_ctx = 2048
-            n_batch = 256
-        else:
-            logger.info("Loading on CPU...")
-            n_gpu_layers = 0
-            n_ctx = 512
-            n_batch = 64
-        
-        logger.info(f"GPU layers: {n_gpu_layers}, Context: {n_ctx}, Batch: {n_batch}")
+        # Start with very conservative settings to avoid crashes
+        logger.info("Using ultra-conservative settings to ensure stability...")
         
         model = Llama(
             model_path=model_path,
-            n_ctx=n_ctx,
-            n_batch=n_batch,
-            n_gpu_layers=n_gpu_layers,
-            verbose=False,  # Reduce verbose output
-            n_threads=1 if use_gpu else 2,
+            n_ctx=256,  # Very small context
+            n_batch=32,  # Very small batch
+            n_gpu_layers=0,  # Start with CPU only
+            verbose=False,
+            n_threads=1,
             use_mmap=True,
             use_mlock=False,
-            f16_kv=True if use_gpu else False,
         )
         
-        if use_gpu:
-            logger.info("GGUF model loaded successfully with L4 GPU acceleration")
-        else:
-            logger.info("GGUF model loaded successfully on CPU")
+        logger.info("GGUF model loaded successfully (CPU mode for stability)")
         return model, "gguf"
         
     except Exception as e:
-        logger.error(f"GPU loading failed: {e}")
-        if use_gpu:
-            logger.info("Attempting CPU fallback...")
-            return load_gguf_model(model_path, False)  # Recursive CPU fallback
-        else:
-            logger.error(f"CPU loading also failed: {e}")
-            return None, None
+        logger.error(f"Model loading failed: {e}")
+        logger.error(f"Exception details: {str(e)}")
+        return None, None
 
 def load_transformers_model(model_path: str, use_gpu: bool = True):
     """Load model using transformers library with GPU support"""
@@ -199,17 +185,13 @@ def load_transformers_model(model_path: str, use_gpu: bool = True):
         return None, None, None
 
 def initialize_model():
-    """Initialize the best available model with L4 GPU support"""
+    """Initialize the best available model with conservative settings"""
     global model, tokenizer, model_type, model_path
     
-    logger.info("Starting model initialization with L4 GPU support...")
+    logger.info("Starting conservative model initialization...")
     
-    # Check GPU availability
-    gpu_available, gpu_count, gpu_name = check_gpu()
-    logger.info(f"GPU Status: Available={gpu_available}, Count={gpu_count}, Name={gpu_name}")
-    
-    # Start GPU monitoring
-    start_gpu_monitoring()
+    # Skip complex GPU checks to avoid crashes
+    logger.info("Using simplified initialization to ensure stability")
     
     # Discover available models
     available_models = discover_models()
@@ -222,22 +204,41 @@ def initialize_model():
     for model_path_candidate, size in available_models:
         logger.info(f"Attempting to load model: {model_path_candidate} ({size:.1f}GB)")
         
-        # Try GGUF first (more efficient)
+        # Only try GGUF with ultra-conservative settings
         if model_path_candidate.endswith('.gguf'):
             try:
-                logger.info("Loading GGUF model with L4 GPU support...")
-                loaded_model, loaded_type = load_gguf_model(model_path_candidate, gpu_available)
-                if loaded_model:
-                    model = loaded_model
-                    model_type = loaded_type
-                    model_path = model_path_candidate
-                    logger.info(f"Successfully loaded GGUF model: {model_path}")
-                    logger.info("Model initialization completed successfully!")
-                    return True
-                else:
-                    logger.warning("GGUF model loading returned None")
+                logger.info("Loading GGUF model with conservative settings...")
+                
+                # Add timeout protection
+                import signal
+                def timeout_handler(signum, frame):
+                    raise TimeoutError("Model loading timed out")
+                
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(60)  # 60 second timeout
+                
+                try:
+                    loaded_model, loaded_type = load_gguf_model(model_path_candidate, False)  # Force CPU
+                    signal.alarm(0)  # Cancel timeout
+                    
+                    if loaded_model:
+                        model = loaded_model
+                        model_type = loaded_type
+                        model_path = model_path_candidate
+                        logger.info(f"Successfully loaded GGUF model: {model_path}")
+                        logger.info("Model initialization completed successfully!")
+                        return True
+                    else:
+                        logger.warning("GGUF model loading returned None")
+                except TimeoutError:
+                    signal.alarm(0)
+                    logger.error("Model loading timed out after 60 seconds")
+                    continue
+                    
             except Exception as e:
                 logger.error(f"Exception during GGUF loading: {e}")
+                import traceback
+                logger.error(f"Full traceback: {traceback.format_exc()}")
                 continue  # Try next model
     
     logger.error("Failed to load any model")
