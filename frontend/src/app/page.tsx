@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Send, Bot, User, Search, Plus, ChevronDown, MessageSquare, RefreshCw, Settings } from 'lucide-react'
+import { Send, Bot, User, Search, Plus, ChevronDown, MessageSquare, RefreshCw, Settings, Save, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import { autoSaveChatHistory, exportChatAsJSON, loadChatFromR2, listUserChats } from '../../lib/r2-storage'
 
 // 强制更新版本 v2.0 - 确保只显示两个GGUF模型，清除所有缓存
 
@@ -57,6 +58,8 @@ export default function ChatPage() {
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredSessions, setFilteredSessions] = useState<ChatSession[]>([])
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
+  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 强制验证模型数量
@@ -311,6 +314,27 @@ export default function ChatPage() {
                 setChatSessions(prev => 
                   prev.map(s => s.id === currentSession.id ? updatedSession : s)
                 )
+
+                // 自动保存聊天记录到R2
+                if (autoSaveEnabled && updatedMessages.length >= 2) {
+                  try {
+                    console.log('💾 自动保存聊天记录到R2...')
+                    const saveResult = await autoSaveChatHistory(updatedMessages, {
+                      model: selectedModel.name,
+                      sessionId: currentSession.id,
+                      sessionTitle: currentSession.title
+                    })
+                    
+                    if (saveResult.success) {
+                      setLastSaveTime(new Date())
+                      console.log('✅ 聊天记录已保存到R2:', saveResult.chatId)
+                    } else {
+                      console.warn('⚠️ 聊天记录保存失败:', saveResult.error)
+                    }
+                  } catch (error) {
+                    console.error('❌ 自动保存异常:', error)
+                  }
+                }
               }
               setIsLoading(false)
               return
@@ -385,6 +409,27 @@ export default function ChatPage() {
         setChatSessions(prev => 
           prev.map(s => s.id === currentSession.id ? updatedSession : s)
         )
+
+        // 自动保存聊天记录到R2
+        if (autoSaveEnabled && updatedMessages.length >= 2) {
+          try {
+            console.log('💾 自动保存聊天记录到R2...')
+            const saveResult = await autoSaveChatHistory(updatedMessages, {
+              model: selectedModel.name,
+              sessionId: currentSession.id,
+              sessionTitle: currentSession.title
+            })
+            
+            if (saveResult.success) {
+              setLastSaveTime(new Date())
+              console.log('✅ 聊天记录已保存到R2:', saveResult.chatId)
+            } else {
+              console.warn('⚠️ 聊天记录保存失败:', saveResult.error)
+            }
+          } catch (error) {
+            console.error('❌ 自动保存异常:', error)
+          }
+        }
       }
       
     } catch (error) {
@@ -595,19 +640,78 @@ export default function ChatPage() {
         {currentSession && currentSession.messages.length > 0 && (
           <div className="px-6 py-4 border-b border-gray-200 bg-white">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {currentSession.title}
-              </h2>
-              {currentSession.messages.length > 1 && (
-                <button
-                  onClick={regenerateLastMessage}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <RefreshCw size={16} />
-                  Regenerate
-                </button>
-              )}
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {currentSession.title}
+                </h2>
+                {lastSaveTime && (
+                  <p className="text-xs text-green-600 mt-1">
+                    💾 已保存到R2: {lastSaveTime.toLocaleTimeString()}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {/* 自动保存开关 */}
+                <label className="flex items-center gap-2 text-sm text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={autoSaveEnabled}
+                    onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+                    className="rounded"
+                  />
+                  自动保存
+                </label>
+                
+                {/* 手动保存按钮 */}
+                {currentSession.messages.length >= 2 && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const saveResult = await autoSaveChatHistory(currentSession.messages, {
+                          model: selectedModel.name,
+                          sessionId: currentSession.id,
+                          sessionTitle: currentSession.title
+                        })
+                        if (saveResult.success) {
+                          setLastSaveTime(new Date())
+                          alert('✅ 聊天记录已保存到R2')
+                        } else {
+                          alert('❌ 保存失败: ' + saveResult.error)
+                        }
+                      } catch (error) {
+                        alert('❌ 保存异常: ' + error)
+                      }
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <Save size={16} />
+                    保存
+                  </button>
+                )}
+                
+                {/* 导出按钮 */}
+                {currentSession.messages.length > 0 && (
+                  <button
+                    onClick={() => exportChatAsJSON(currentSession.messages)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <Download size={16} />
+                    导出
+                  </button>
+                )}
+                
+                {/* 重新生成按钮 */}
+                {currentSession.messages.length > 1 && (
+                  <button
+                    onClick={regenerateLastMessage}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={16} />
+                    重新生成
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

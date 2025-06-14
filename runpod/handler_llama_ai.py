@@ -10,10 +10,15 @@ import logging
 import time
 import subprocess
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple, List
+from pathlib import Path
 
 # 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(filename)s :%(lineno)d  %(asctime)s %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 # 全局变量
@@ -21,89 +26,99 @@ model = None
 model_type = None
 model_path = None
 
-# 强制设置环境变量 - 使用新的GGML_CUDA
+# 强制设置CUDA环境变量
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-os.environ['GGML_CUDA'] = '1'  # 新版本使用GGML_CUDA
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+os.environ['GGML_CUDA'] = '1'
+os.environ['LLAMA_CUBLAS'] = '1'
+os.environ['CMAKE_CUDA_ARCHITECTURES'] = '75;80;86;89'  # 支持多种GPU架构
+os.environ['FORCE_CMAKE'] = '1'
+os.environ['CMAKE_ARGS'] = '-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89'
+
+# 强制x86_64架构，避免ARM64问题
+os.environ['ARCHFLAGS'] = '-arch x86_64'
+os.environ['CFLAGS'] = '-march=x86-64'
+os.environ['CXXFLAGS'] = '-march=x86-64'
+
+try:
+    from llama_cpp import Llama
+    import GPUtil
+except ImportError as e:
+    logging.error(f"导入失败: {e}")
+    raise
 
 def check_gpu_usage():
     """检查GPU使用情况"""
     try:
-        result = subprocess.run(['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu', '--format=csv,noheader,nounits'], 
-                              capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            gpu_info = result.stdout.strip().split(', ')
-            if len(gpu_info) >= 4:
-                util = gpu_info[0]
-                mem_used = float(gpu_info[1]) / 1024  # MB to GB
-                mem_total = float(gpu_info[2]) / 1024  # MB to GB
-                temp = gpu_info[3]
-                logger.info(f"🔥 GPU状态: 利用率{util}%, 显存{mem_used:.1f}/{mem_total:.1f}GB, 温度{temp}°C")
-                return util, mem_used, mem_total, temp
+        gpus = GPUtil.getGPUs()
+        if gpus:
+            gpu = gpus[0]
+            logger.info(f"🔥 GPU状态: 利用率{gpu.load*100:.0f}%, 显存{gpu.memoryUsed/1024:.1f}/{gpu.memoryTotal/1024:.1f}GB, 温度{gpu.temperature}°C")
+            return gpu.memoryTotal / 1024, gpu.memoryUsed / 1024
+        else:
+            logger.warning("⚠️ 未检测到GPU")
+            return None, None
     except Exception as e:
-        logger.error(f"GPU状态检查失败: {e}")
-    return None, None, None, None
+        logger.error(f"❌ GPU检查失败: {e}")
+        return None, None
 
-def find_models():
-    """查找可用的模型文件"""
-    model_dir = "/runpod-volume/text_models"
+def find_models() -> List[Tuple[str, float]]:
+    """查找可用的GGUF模型"""
+    model_dir = Path("/runpod-volume/text_models")
     models = []
     
-    if os.path.exists(model_dir):
-        for file in os.listdir(model_dir):
-            if file.endswith('.gguf'):
-                file_path = os.path.join(model_dir, file)
-                file_size = os.path.getsize(file_path) / (1024**3)  # GB
-                models.append((file_path, file_size))
-                logger.info(f"📁 发现模型: {file_path} ({file_size:.1f}GB)")
+    if model_dir.exists():
+        for model_file in model_dir.glob("*.gguf"):
+            size_gb = model_file.stat().st_size / (1024**3)
+            models.append((str(model_file), size_gb))
+            logger.info(f"📁 发现模型: {model_file} ({size_gb:.1f}GB)")
     
-    return sorted(models, key=lambda x: x[1])  # 按大小排序
+    # 按大小排序，小模型优先
+    models.sort(key=lambda x: x[1])
+    return models
 
-def load_gguf_model(model_path: str):
-    """使用llama-cpp-python加载GGUF模型，强制使用GPU"""
+def load_gguf_model(model_path: str) -> Tuple[Llama, str]:
+    """加载GGUF模型，强制GPU模式"""
     try:
-        # 导入llama-cpp
-        from llama_cpp import Llama
-        import llama_cpp
-        
-        logger.info(f"llama-cpp-python版本: {llama_cpp.__version__}")
+        logger.info(f"llama-cpp-python版本: {Llama.__version__ if hasattr(Llama, '__version__') else '未知'}")
         logger.info(f"📂 强制GPU模式加载: {model_path}")
         
         # 检查GPU状态
-        check_gpu_usage()
+        mem_total, mem_used = check_gpu_usage()
         
-        # 根据GPU显存动态设置参数
-        _, mem_used, mem_total, _ = check_gpu_usage()
-        if mem_total and mem_total > 40:  # L40 GPU有45GB显存
-            logger.info(f"🎯 检测到L40 GPU ({mem_total:.1f}GB)，使用全部GPU层和完整上下文")
-            n_gpu_layers = -1  # 全部层到GPU
+        # 强制所有层到GPU，不管GPU大小
+        logger.info(f"🎯 强制所有层到GPU (n_gpu_layers=-1)")
+        
+        # 根据GPU显存调整配置
+        if mem_total and mem_total > 40:  # RTX 4090等高端GPU
             n_ctx = 131072     # 使用模型的完整上下文长度
             n_batch = 2048     # 大批处理
-        elif mem_total and mem_total > 20:  # L4 GPU有22.5GB显存
-            logger.info(f"🎯 检测到L4 GPU ({mem_total:.1f}GB)，使用大部分GPU层")
-            n_gpu_layers = 25  # 大部分层到GPU
+        elif mem_total and mem_total > 20:  # L4 GPU等
             n_ctx = 65536      # 使用一半上下文
             n_batch = 1024     # 中等批处理
         else:
-            logger.info(f"🎯 检测到其他GPU ({mem_total:.1f}GB)，使用适量GPU层")
-            n_gpu_layers = 15  # 适量层到GPU
             n_ctx = 32768      # 使用四分之一上下文
             n_batch = 512      # 小批处理
         
-        logger.info(f"🔧 GPU配置: n_gpu_layers={n_gpu_layers}, n_ctx={n_ctx}, n_batch={n_batch}")
+        logger.info(f"🔧 GPU配置: n_gpu_layers=-1 (全部), n_ctx={n_ctx}, n_batch={n_batch}")
         
-        # 强制GPU模式，不允许CPU回退
+        # 强制GPU模式，使用所有可用的优化
         model = Llama(
             model_path=model_path,
-            n_ctx=n_ctx,              # 使用完整或适当的上下文长度
-            n_batch=n_batch,          # 大批处理大小
-            n_gpu_layers=n_gpu_layers, # GPU层数
+            n_ctx=n_ctx,              # 上下文长度
+            n_batch=n_batch,          # 批处理大小
+            n_gpu_layers=-1,          # 强制所有层到GPU
             verbose=True,             # 显示详细日志以查看层分配
             n_threads=1,              # 最少CPU线程，专注GPU
             use_mmap=True,            # 使用内存映射
             use_mlock=False,          # 不锁定内存
             f16_kv=True,              # 使用FP16 KV缓存节省显存
             logits_all=False,         # 不计算所有logits节省计算
+            # 强制CUDA后端
+            main_gpu=0,               # 使用第一个GPU
+            tensor_split=None,        # 不分割张量
+            rope_scaling_type=None,   # 不使用rope缩放
+            rope_freq_base=0.0,       # 使用默认频率基数
+            rope_freq_scale=0.0,      # 使用默认频率缩放
         )
         
         logger.info("✅ 模型GPU加载成功")
@@ -112,6 +127,17 @@ def load_gguf_model(model_path: str):
         
     except Exception as e:
         logger.error(f"❌ GGUF模型加载失败: {e}")
+        # 尝试重新安装llama-cpp-python with CUDA
+        logger.info("🔄 尝试重新安装CUDA版本的llama-cpp-python...")
+        try:
+            subprocess.run([
+                "pip", "install", "--force-reinstall", "--no-cache-dir",
+                "llama-cpp-python", "--extra-index-url", 
+                "https://abetlen.github.io/llama-cpp-python/whl/cu121"
+            ], check=True)
+            logger.info("✅ 重新安装完成，请重启容器")
+        except Exception as install_error:
+            logger.error(f"❌ 重新安装失败: {install_error}")
         raise e
 
 def initialize_model():
