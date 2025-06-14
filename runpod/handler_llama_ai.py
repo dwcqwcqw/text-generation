@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-RunPod Handler - 强制GPU模式
-只使用GPU，不再保守，修复提示词重复问题
+RunPod Handler - 强制GPU模式，彻底删除CPU代码
+专为L40 GPU优化，45GB显存
 """
 
 import runpod
@@ -24,43 +24,48 @@ model_path = None
 # 强制设置环境变量
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 os.environ['LLAMA_CUBLAS'] = '1'
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+
+def check_gpu_usage():
+    """检查GPU使用情况"""
+    try:
+        result = subprocess.run(['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu', '--format=csv,noheader,nounits'], 
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            gpu_info = result.stdout.strip().split(', ')
+            gpu_util = gpu_info[0]
+            memory_used = float(gpu_info[1]) / 1024  # GB
+            memory_total = float(gpu_info[2]) / 1024  # GB
+            temperature = gpu_info[3]
+            logger.info(f"🔥 GPU状态: 利用率{gpu_util}%, 显存{memory_used:.1f}/{memory_total:.1f}GB, 温度{temperature}°C")
+            return True
+        else:
+            logger.error("无法获取GPU状态")
+            return False
+    except Exception as e:
+        logger.error(f"GPU状态检查失败: {e}")
+        return False
 
 def check_gpu():
-    """检查GPU可用性和CUDA支持"""
+    """检查GPU可用性"""
     try:
-        # 检查nvidia-smi
-        try:
-            result = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,compute_cap', '--format=csv,noheader'], 
-                                  capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                gpu_info = result.stdout.strip().split('\n')[0].split(', ')
-                gpu_name = gpu_info[0].strip()
-                gpu_memory = float(gpu_info[1].split()[0]) / 1024  # 转换为GB
-                compute_cap = gpu_info[2] if len(gpu_info) > 2 else "Unknown"
-                logger.info(f"GPU检测: {gpu_name}, 内存: {gpu_memory:.1f}GB, 计算能力: {compute_cap}")
-                return True, gpu_name, gpu_memory
-            else:
-                logger.error(f"nvidia-smi命令失败: {result.stderr}")
-        except Exception as e:
-            logger.error(f"nvidia-smi检查失败: {e}")
-        
         # 检查PyTorch CUDA支持
         import torch
         if torch.cuda.is_available():
             gpu_count = torch.cuda.device_count()
             gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
             gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3 if gpu_count > 0 else 0
-            logger.info(f"PyTorch CUDA可用: {gpu_count} GPU, 名称: {gpu_name}, 内存: {gpu_memory:.1f}GB")
+            logger.info(f"✅ GPU检测成功: {gpu_name}, 显存: {gpu_memory:.1f}GB")
             return True, gpu_name, gpu_memory
         else:
-            logger.error("PyTorch CUDA不可用，无法继续")
-            return False, "None", 0
+            logger.error("❌ PyTorch CUDA不可用")
+            raise RuntimeError("GPU不可用，无法继续")
     except Exception as e:
-        logger.error(f"GPU检查错误: {e}")
-        return False, "Error", 0
+        logger.error(f"❌ GPU检查失败: {e}")
+        raise RuntimeError(f"GPU检查失败: {e}")
 
 def discover_models():
-    """在卷中发现可用模型"""
+    """发现可用模型"""
     model_paths = [
         "/runpod-volume/text_models/L3.2-8X4B.gguf",  # 较小的模型
         "/runpod-volume/text_models/L3.2-8X3B.gguf"   # 较大的模型
@@ -71,136 +76,85 @@ def discover_models():
         if os.path.exists(path):
             size = os.path.getsize(path) / (1024**3)  # 大小(GB)
             available_models.append((path, size))
-            logger.info(f"发现模型: {path} ({size:.1f}GB)")
+            logger.info(f"📁 发现模型: {path} ({size:.1f}GB)")
         else:
-            logger.warning(f"模型未找到: {path}")
+            logger.warning(f"⚠️ 模型未找到: {path}")
     
     return available_models
 
 def load_gguf_model(model_path: str):
-    """使用llama-cpp-python加载GGUF模型，强制使用GPU"""
+    """强制GPU模式加载GGUF模型"""
     try:
-        # 导入llama-cpp
         from llama_cpp import Llama
         import llama_cpp
         
-        logger.info(f"llama-cpp-python版本: {llama_cpp.__version__}")
-        logger.info(f"从{model_path}加载GGUF模型")
+        logger.info(f"🚀 llama-cpp-python版本: {llama_cpp.__version__}")
+        logger.info(f"📂 加载模型: {model_path}")
         
-        # 检查GPU可用性
+        # 检查GPU
         gpu_available, gpu_name, gpu_memory = check_gpu()
-        if not gpu_available:
-            logger.warning("GPU不可用，将使用CPU模式")
-            # 使用CPU模式作为回退
-            model = Llama(
-                model_path=model_path,
-                n_ctx=2048,           # 适中的上下文窗口
-                n_batch=128,          # 适中的批处理大小
-                n_gpu_layers=0,       # CPU模式
-                verbose=True,
-                n_threads=4,
-                use_mmap=True,
-                use_mlock=False,
-            )
-            logger.info("✅ 模型在CPU模式下成功加载")
-            return model, "gguf_cpu"
         
-        # 针对L4/L40 GPU优化的参数
-        # 根据GPU内存调整层数
-        if gpu_memory > 40:  # L40有45GB显存
-            n_gpu_layers = -1  # 全部层放到GPU
-            logger.info(f"检测到大显存GPU ({gpu_memory:.1f}GB)，使用全部GPU层")
-        elif gpu_memory > 20:  # L4有22.5GB显存
-            n_gpu_layers = 25  # 大部分层放到GPU
-            logger.info(f"检测到中等显存GPU ({gpu_memory:.1f}GB)，使用{n_gpu_layers}个GPU层")
-        else:
-            n_gpu_layers = 15  # 较少层放到GPU
-            logger.info(f"检测到小显存GPU ({gpu_memory:.1f}GB)，使用{n_gpu_layers}个GPU层")
+        # 强制使用全部GPU层
+        logger.info(f"🎯 强制GPU模式: 全部层到GPU ({gpu_name})")
         
-        logger.info(f"尝试加载模型到GPU，GPU层数: {n_gpu_layers}")
+        # 检查初始GPU状态
+        check_gpu_usage()
+        
         model = Llama(
             model_path=model_path,
-            n_ctx=2048,           # 适中的上下文窗口
-            n_batch=512,          # 较大的批处理大小
-            n_gpu_layers=n_gpu_layers,  # GPU层数
-            verbose=True,         # 详细日志
+            n_ctx=4096,           # 更大的上下文窗口
+            n_batch=1024,         # 更大的批处理大小
+            n_gpu_layers=-1,      # 全部层到GPU
+            verbose=False,        # 关闭详细日志减少噪音
             use_mmap=True,
             use_mlock=False,
+            n_threads=1,          # GPU模式下减少CPU线程
         )
         
-        logger.info("✅ 模型在GPU模式下成功加载")
+        logger.info("✅ 模型GPU加载成功")
+        
+        # 检查加载后GPU状态
+        check_gpu_usage()
+        
         return model, "gguf_gpu"
         
     except Exception as e:
-        logger.error(f"模型加载失败: {e}")
-        import traceback
-        logger.error(f"异常详情: {traceback.format_exc()}")
-        
-        # 尝试使用CPU模式作为回退
-        try:
-            logger.warning("尝试使用CPU模式作为回退...")
-            from llama_cpp import Llama
-            model = Llama(
-                model_path=model_path,
-                n_ctx=1024,           # 较小的上下文窗口
-                n_batch=64,           # 较小的批处理大小
-                n_gpu_layers=0,       # CPU模式
-                verbose=True,
-                n_threads=4,
-                use_mmap=True,
-                use_mlock=False,
-            )
-            logger.info("✅ 模型在CPU回退模式下成功加载")
-            return model, "gguf_cpu_fallback"
-        except Exception as e2:
-            logger.error(f"CPU回退模式也失败: {e2}")
-            return None, None
+        logger.error(f"❌ 模型加载失败: {e}")
+        raise RuntimeError(f"模型加载失败: {e}")
 
 def initialize_model():
-    """初始化模型，优先使用GPU模式"""
+    """初始化模型"""
     global model, model_type, model_path
     
-    logger.info("开始GPU优化模型初始化...")
+    logger.info("🔄 开始模型初始化...")
     
     # 发现可用模型
     available_models = discover_models()
     
     if not available_models:
-        logger.error("在指定路径未找到模型")
-        return False
+        raise RuntimeError("未找到任何模型")
     
     # 按大小排序模型（优先使用较小的模型）
     available_models.sort(key=lambda x: x[1])
     
-    # 尝试加载模型
-    for model_path_candidate, size in available_models:
-        logger.info(f"尝试加载模型: {model_path_candidate} ({size:.1f}GB)")
-        
-        if model_path_candidate.endswith('.gguf'):
-            try:
-                # 加载GGUF模型
-                loaded_model, loaded_type = load_gguf_model(model_path_candidate)
-                
-                if loaded_model:
-                    model = loaded_model
-                    model_type = loaded_type
-                    model_path = model_path_candidate
-                    logger.info(f"成功加载GGUF模型: {model_path}")
-                    logger.info("模型初始化完成!")
-                    return True
-                else:
-                    logger.warning("GGUF模型加载返回None")
-            except Exception as e:
-                logger.error(f"GGUF加载异常: {e}")
-                import traceback
-                logger.error(f"完整异常堆栈: {traceback.format_exc()}")
-                continue  # 尝试下一个模型
+    # 加载第一个可用模型
+    model_path_candidate, size = available_models[0]
+    logger.info(f"🎯 选择模型: {model_path_candidate} ({size:.1f}GB)")
     
-    logger.error("无法加载任何模型")
-    return False
+    if model_path_candidate.endswith('.gguf'):
+        loaded_model, loaded_type = load_gguf_model(model_path_candidate)
+        
+        if loaded_model:
+            model = loaded_model
+            model_type = loaded_type
+            model_path = model_path_candidate
+            logger.info(f"✅ 模型初始化完成: {model_path}")
+            return True
+    
+    raise RuntimeError("模型初始化失败")
 
 def get_personality_prompt(personality: str) -> str:
-    """获取不同AI人格的系统提示词"""
+    """获取AI人格提示词"""
     personalities = {
         "default": "You are a helpful AI assistant. Provide clear, accurate, and helpful responses.",
         "creative": "You are a creative AI assistant. Think outside the box and provide imaginative ideas.",
@@ -208,42 +162,31 @@ def get_personality_prompt(personality: str) -> str:
         "friendly": "You are a friendly AI assistant. Be warm, approachable, and conversational in your responses.",
         "professional": "You are a professional AI assistant. Provide concise, practical, and business-oriented advice."
     }
-    
     return personalities.get(personality, personalities["default"])
 
 def format_llama_prompt(prompt: str, personality: str = "default") -> str:
-    """格式化Llama 3.2的提示词，避免重复标记"""
+    """格式化Llama 3.2提示词"""
     system_prompt = get_personality_prompt(personality)
     
-    # 检查提示词是否已经包含开始标记，避免重复
-    if prompt.startswith("<|begin_of_text|>"):
-        logger.warning("提示词已包含开始标记，直接返回原提示词")
-        return prompt
-    
-    # 检查提示词是否已经是完整格式
-    if "<|start_header_id|>" in prompt and "<|end_header_id|>" in prompt:
-        logger.info("提示词已经是完整格式，直接返回")
-        return prompt
-    
-    # 构建完整的提示词格式
+    # 直接构建提示词，不检查重复
     formatted_prompt = f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
     
-    logger.info(f"格式化后的提示词长度: {len(formatted_prompt)}")
     return formatted_prompt
 
 def generate_response(prompt: str, personality: str = "default") -> str:
-    """使用加载的模型生成响应"""
+    """生成响应"""
     global model, model_type, model_path
     
     if model is None:
-        return "错误: 模型未加载。请检查服务器日志。"
+        raise RuntimeError("模型未加载")
     
     try:
         # 格式化提示词
         formatted_prompt = format_llama_prompt(prompt, personality)
-        logger.info(f"生成响应，使用人格: {personality}")
-        logger.info(f"原始提示词: {prompt[:100]}...")
-        logger.info(f"格式化提示词前100个字符: {formatted_prompt[:100]}...")
+        logger.info(f"💭 生成响应 (人格: {personality})")
+        
+        # 检查生成前GPU状态
+        check_gpu_usage()
         
         # 生成参数
         generation_params = {
@@ -252,93 +195,87 @@ def generate_response(prompt: str, personality: str = "default") -> str:
             "top_p": 0.9,
             "repeat_penalty": 1.1,
             "stop": ["<|eot_id|>", "<|end_of_text|>", "<|start_header_id|>"],
-            "echo": False  # 不回显输入
+            "echo": False
         }
-        
-        logger.info(f"开始生成响应，参数: {generation_params}")
         
         # 生成响应
         start_time = time.time()
         output = model(formatted_prompt, **generation_params)
         elapsed = time.time() - start_time
         
-        logger.info(f"生成完成，耗时: {elapsed:.2f}秒")
-        logger.info(f"原始输出类型: {type(output)}")
+        # 检查生成后GPU状态
+        check_gpu_usage()
         
         # 提取响应文本
-        if isinstance(output, dict):
-            if "choices" in output and len(output["choices"]) > 0:
-                response_text = output["choices"][0].get("text", "")
-            else:
-                response_text = str(output)
+        if isinstance(output, dict) and "choices" in output and len(output["choices"]) > 0:
+            response_text = output["choices"][0].get("text", "").strip()
         else:
-            response_text = str(output)
-        
-        logger.info(f"提取的响应文本长度: {len(response_text)}")
-        logger.info(f"响应文本前100个字符: {response_text[:100]}...")
-        
-        # 清理响应文本
-        response_text = response_text.strip()
+            response_text = str(output).strip()
         
         if not response_text:
-            logger.warning("生成的响应为空")
-            return "抱歉，我无法生成有效的响应。请重试。"
+            response_text = "抱歉，我无法生成有效的响应。"
         
-        logger.info(f"最终响应长度: {len(response_text)}")
+        logger.info(f"⚡ 生成完成: {elapsed:.2f}秒, 长度: {len(response_text)}")
+        
         return response_text
         
     except Exception as e:
-        logger.error(f"生成响应错误: {e}")
-        import traceback
-        logger.error(f"异常详情: {traceback.format_exc()}")
+        logger.error(f"❌ 生成响应错误: {e}")
         return f"生成错误: {str(e)}"
 
 def handler(event):
     """RunPod handler函数"""
     try:
-        logger.info("Handler被调用")
+        logger.info("🎯 Handler调用")
         
         # 提取输入
         user_input = event.get("input", {})
         prompt = user_input.get("prompt", "")
         personality = user_input.get("personality", "default")
         
-        logger.info(f"收到提示词: {prompt[:50]}...")
-        logger.info(f"人格: {personality}")
+        if not prompt:
+            return {
+                "output": "请提供有效的提示词",
+                "status": "error"
+            }
+        
+        logger.info(f"📝 提示词: {prompt[:50]}...")
         
         # 初始化模型（如果未初始化）
         global model
         if model is None:
-            logger.info("模型未初始化，开始初始化...")
+            logger.info("🔄 模型未初始化，开始初始化...")
             success = initialize_model()
             if not success:
                 return {
-                    "output": "错误: 模型初始化失败。请检查服务器日志。",
+                    "output": "模型初始化失败",
                     "status": "error"
                 }
         
         # 生成响应
         response = generate_response(prompt, personality)
         
-        logger.info(f"返回响应: {response[:50]}...")
-        
-        return {
+        # 返回标准格式
+        result = {
             "output": response,
             "status": "success",
-            "model": model_path,
-            "model_type": model_type
+            "model_info": {
+                "model_path": model_path,
+                "model_type": model_type
+            }
         }
         
+        logger.info(f"✅ 响应返回: {len(response)}字符")
+        return result
+        
     except Exception as e:
-        logger.error(f"Handler错误: {e}")
-        import traceback
-        logger.error(f"异常详情: {traceback.format_exc()}")
+        logger.error(f"❌ Handler错误: {e}")
         return {
-            "output": f"错误: {str(e)}",
+            "output": f"系统错误: {str(e)}",
             "status": "error"
         }
 
 # 启动RunPod serverless
 if __name__ == "__main__":
-    logger.info("启动GPU优化的RunPod handler...")
+    logger.info("🚀 启动GPU优化RunPod handler...")
     runpod.serverless.start({"handler": handler})
