@@ -36,10 +36,10 @@ COPY runpod/requirements.txt .
 # 安装Python依赖
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# 安装预编译的GPU版本llama-cpp-python
-RUN pip3 install --no-cache-dir \
+# 安装预编译的GPU版本llama-cpp-python - 强制使用预编译包
+RUN pip3 install --no-cache-dir --only-binary=llama-cpp-python \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121 \
-    llama-cpp-python
+    "llama-cpp-python>=0.3.4"
 
 # 复制所有必要文件
 COPY runpod/handler_llama_ai.py ./handler_llama_ai.py
