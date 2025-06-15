@@ -181,12 +181,28 @@ def initialize_model():
     if not models:
         raise Exception("未找到任何GGUF模型文件")
     
-    # 选择最小的模型（更快加载）
-    selected_model = models[0]
-    model_path = selected_model[0]
-    model_size = selected_model[1]
-    
-    logger.info(f"🎯 选择模型: {model_path} ({model_size:.1f}GB)")
+    # 如果已经指定了模型路径，使用指定的模型
+    if model_path:
+        logger.info(f"🎯 使用指定的模型: {model_path}")
+        # 验证指定的模型是否存在
+        if not os.path.exists(model_path):
+            logger.error(f"❌ 指定的模型不存在: {model_path}")
+            # 回退到默认选择
+            selected_model = models[0]
+            model_path = selected_model[0]
+            model_size = selected_model[1]
+            logger.info(f"🔄 回退到默认模型: {model_path} ({model_size:.1f}GB)")
+        else:
+            # 获取指定模型的大小信息
+            model_size = os.path.getsize(model_path) / (1024**3)  # GB
+            logger.info(f"📏 指定模型大小: {model_size:.1f}GB")
+            logger.info(f"✅ 确认使用指定模型: {os.path.basename(model_path)}")
+    else:
+        # 没有指定模型，选择最小的模型（更快加载）
+        selected_model = models[0]
+        model_path = selected_model[0]
+        model_size = selected_model[1]
+        logger.info(f"🎯 自动选择模型: {model_path} ({model_size:.1f}GB)")
     
     # 加载模型
     model, model_type = load_gguf_model(model_path)
