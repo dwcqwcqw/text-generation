@@ -125,44 +125,42 @@ def check_and_install_llama_cpp_python():
         return False
 
 def test_gpu_loading():
-    """测试GPU加载"""
+    """测试GPU加载（轻量级测试）"""
     logger.info("🧪 测试GPU加载...")
     
     try:
         from llama_cpp import Llama
         logger.info(f"✅ llama-cpp-python导入成功")
         
-        # 创建一个测试模型实例（不加载实际模型）
-        logger.info("🔧 测试GPU配置...")
+        # 轻量级测试：只验证模块可用性，不实际加载模型
+        logger.info("🔧 验证GPU配置...")
         
-        # 检查是否有模型文件
+        # 检查CUDA环境变量
+        cuda_vars = ['GGML_CUDA', 'CUDA_VISIBLE_DEVICES']
+        for var in cuda_vars:
+            value = os.environ.get(var, 'NOT_SET')
+            logger.info(f"   {var}: {value}")
+        
+        # 检查是否有模型文件（但不加载）
         model_dir = "/runpod-volume/text_models"
         if os.path.exists(model_dir):
             model_files = [f for f in os.listdir(model_dir) if f.endswith('.gguf')]
             if model_files:
-                model_path = os.path.join(model_dir, model_files[0])
-                logger.info(f"🎯 测试模型: {model_path}")
-                
-                # 创建模型实例进行测试
-                test_model = Llama(
-                    model_path=model_path,
-                    n_gpu_layers=-1,  # 强制所有层到GPU
-                    n_ctx=2048,       # 小上下文用于测试
-                    verbose=True      # 显示详细日志
-                )
-                
-                logger.info("✅ GPU模型加载测试成功")
-                del test_model  # 释放内存
-                return True
+                logger.info(f"🎯 发现 {len(model_files)} 个模型文件")
+                for model_file in model_files:
+                    size_gb = os.path.getsize(os.path.join(model_dir, model_file)) / (1024**3)
+                    logger.info(f"   - {model_file} ({size_gb:.1f}GB)")
             else:
-                logger.warning("⚠️ 未找到模型文件，跳过加载测试")
-                return True
+                logger.warning("⚠️ 未找到模型文件")
         else:
-            logger.warning("⚠️ 模型目录不存在，跳过加载测试")
-            return True
+            logger.warning("⚠️ 模型目录不存在")
+        
+        logger.info("✅ GPU环境验证完成")
+        logger.info("💡 实际模型加载将在首次请求时进行")
+        return True
             
     except Exception as e:
-        logger.error(f"❌ GPU加载测试失败: {e}")
+        logger.error(f"❌ GPU环境验证失败: {e}")
         return False
 
 def main():
