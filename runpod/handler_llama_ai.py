@@ -183,7 +183,8 @@ def initialize_model():
             logger.error(f"❌ 模型目录不存在: {models_dir}")
             return False
         
-        models = get_available_models()
+        # 使用find_models()函数获取可用模型
+        models = find_models()
         if not models:
             logger.error("❌ 未找到可用模型")
             return False
@@ -194,7 +195,8 @@ def initialize_model():
             selected_model = model_path
         else:
             # 否则使用默认模型（第一个）
-            selected_model = models[0]["path"]
+            # find_models返回的是(path, size)的元组列表
+            selected_model = models[0][0]  # 取第一个模型的路径
             model_path = selected_model
         
         # 获取模型大小用于优化配置
@@ -202,111 +204,8 @@ def initialize_model():
         logger.info(f"📏 指定模型大小: {model_size_gb:.1f}GB")
         logger.info(f"✅ 确认使用指定模型: {os.path.basename(selected_model)}")
         
-        # 检查llama-cpp-python版本
-        try:
-            import llama_cpp
-            version = getattr(llama_cpp, '__version__', '未知')
-            logger.info(f"llama-cpp-python版本: {version}")
-        except:
-            logger.info("llama-cpp-python版本: 未知")
-        
-        logger.info(f"📂 强制GPU模式加载: {selected_model}")
-        
-        # 检查加载前GPU状态
-        check_gpu_usage()
-        
-        logger.info("🎯 强制所有层到GPU (n_gpu_layers=-1)")
-        
-        # 根据模型大小调整上下文和批处理大小
-        if model_size_gb > 15:  # 大模型
-            n_ctx, n_batch = 16384, 512
-            logger.info("🔧 高端GPU配置: n_gpu_layers=-1 (全部), n_ctx=16384, n_batch=512")
-        elif model_size_gb > 10:  # 中等模型
-            n_ctx, n_batch = 8192, 256
-            logger.info("🔧 中端GPU配置: n_gpu_layers=-1 (全部), n_ctx=8192, n_batch=256")
-        else:  # 小模型
-            n_ctx, n_batch = 4096, 128
-            logger.info("🔧 入门GPU配置: n_gpu_layers=-1 (全部), n_ctx=4096, n_batch=128")
-        
-        # 强制使用CPU而不是CPU_AARCH64，避免架构警告
-        # 设置环境变量强制使用通用CPU后端
-        os.environ['GGML_USE_CPU_AARCH64'] = '0'
-        os.environ['GGML_USE_CPU_X86_64'] = '1'
-        
-        try:
-            from llama_cpp import Llama
-            
-            # 强制GPU加载，避免CPU架构问题
-            model = Llama(
-                model_path=selected_model,
-                n_gpu_layers=-1,       # 强制所有层到GPU
-                n_ctx=n_ctx,
-                n_batch=n_batch,
-                verbose=True,
-                use_mmap=True,         # 使用内存映射提高效率
-                use_mlock=False,       # 不锁定内存，避免OOM
-                n_threads=None,        # 自动检测线程数
-                offload_kqv=True,      # 将KV缓存放到GPU
-                # 明确指定使用CUDA，避免CPU架构检测
-                tensor_split=None,     # 不分割tensor
-                rope_scaling_type=None,
-                rope_freq_base=0.0,
-                rope_freq_scale=0.0,
-                yarn_ext_factor=-1.0,
-                yarn_attn_factor=1.0,
-                yarn_beta_fast=32.0,
-                yarn_beta_slow=1.0,
-                yarn_orig_ctx=0,
-                mul_mat_q=True,        # 使用量化矩阵乘法
-                f16_kv=True,           # 使用FP16存储KV缓存
-                logits_all=False,      # 只计算最后一个token的logits
-                vocab_only=False,      # 加载完整模型
-                embedding=False,       # 不使用嵌入模式
-                n_gqa=None,            # 自动检测GQA
-                rms_norm_eps=5e-6,     # RMS归一化epsilon
-                last_n_tokens_size=64, # 保持较小的last_n_tokens
-                lora_base=None,        # 不使用LoRA
-                lora_scale=1.0,
-                lora_path=None,
-                numa=False,            # 禁用NUMA
-                chat_format=None,      # 使用默认聊天格式
-                chat_handler=None,     # 使用默认聊天处理器
-                draft_model=None,      # 不使用草稿模型
-                tokenizer=None,        # 使用内置tokenizer
-                # 强制使用CUDA backend
-                main_gpu=0,            # 使用第一个GPU
-                split_mode=1,          # 按层分割
-                type_k=None,           # 自动检测
-                type_v=None,           # 自动检测
-            )
-            
-            logger.info("✅ 模型GPU加载成功")
-            
-        except Exception as gpu_error:
-            logger.error(f"❌ GPU加载失败: {gpu_error}")
-            
-            # 尝试最小配置
-            logger.info("🔄 尝试最小GPU配置...")
-            try:
-                model = Llama(
-                    model_path=selected_model,
-                    n_gpu_layers=-1,
-                    n_ctx=4096,      # 最小上下文
-                    n_batch=128,     # 最小批处理
-                    verbose=False,   # 减少输出
-                    use_mmap=True,
-                    use_mlock=False,
-                    offload_kqv=True,
-                    f16_kv=True,
-                    main_gpu=0
-                )
-                logger.info("✅ 最小GPU配置加载成功")
-            except Exception as min_error:
-                logger.error(f"❌ 最小配置也失败: {min_error}")
-                return False
-        
-        # 检查加载后GPU状态
-        check_gpu_usage()
+        # 直接使用load_gguf_model函数加载模型
+        model, model_type = load_gguf_model(selected_model)
         
         logger.info(f"✅ 模型初始化完成: {selected_model}")
         return True
