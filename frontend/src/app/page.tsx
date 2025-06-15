@@ -120,30 +120,11 @@ export default function ChatPage() {
     setCurrentSession(newSession)
   }
 
+  // 生成对话标题（不超过5个单词）
   const generateChatTitle = (firstMessage: string): string => {
-    // 移除标点符号并分割成单词
-    const words = firstMessage.toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .split(/\s+/)
-      .filter(word => word.length > 2) // 过滤掉短词
-    
-    // 常见停用词
-    const stopWords = ['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use']
-    
-    // 过滤停用词
-    const meaningfulWords = words.filter(word => !stopWords.includes(word))
-    
-    // 取前5个有意义的单词，如果不够就用原始单词
-    const titleWords = meaningfulWords.length >= 5 
-      ? meaningfulWords.slice(0, 5)
-      : words.slice(0, 5)
-    
-    // 首字母大写
-    const title = titleWords
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ')
-    
-    return title || 'New Chat'
+    const words = firstMessage.trim().split(/\s+/).slice(0, 4) // 最多4个词
+    const title = words.join(' ')
+    return title.length > 20 ? title.substring(0, 17) + '...' : title
   }
 
   const updateSessionTitle = (session: ChatSession, firstMessage: string) => {
@@ -206,32 +187,10 @@ export default function ChatPage() {
     
     const RUNPOD_ENDPOINT = `${VITE_API_BASE_URL}/${RUNPOD_ENDPOINT_ID}/runsync`
     
-    // 详细环境变量调试信息
-    console.log('Environment Variables Debug:', {
-      'process.env': typeof process.env,
-      'NEXT_PUBLIC_RUNPOD_API_KEY': process.env.NEXT_PUBLIC_RUNPOD_API_KEY || 'NOT SET',
-      'RUNPOD_API_KEY': process.env.RUNPOD_API_KEY || 'NOT SET', 
-      'NEXT_PUBLIC_RUNPOD_ENDPOINT_ID': process.env.NEXT_PUBLIC_RUNPOD_ENDPOINT_ID || 'NOT SET',
-      'RUNPOD_ENDPOINT_ID': process.env.RUNPOD_ENDPOINT_ID || 'NOT SET',
-      'NEXT_PUBLIC_VITE_API_BASE_URL': process.env.NEXT_PUBLIC_VITE_API_BASE_URL || 'NOT SET',
-      'VITE_API_BASE_URL': process.env.VITE_API_BASE_URL || 'NOT SET',
-      'All env keys': Object.keys(process.env).filter(key => key.includes('RUNPOD') || key.includes('VITE')),
-      'finalApiKey': RUNPOD_API_KEY ? `CONFIGURED (${RUNPOD_API_KEY.substring(0, 10)}...)` : 'NOT CONFIGURED',
-      'finalEndpoint': RUNPOD_ENDPOINT,
-      'finalEndpointId': RUNPOD_ENDPOINT_ID
-    })
-    
-          // 直接使用硬编码的API Key，不依赖localStorage
-      const FINAL_API_KEY = RUNPOD_API_KEY
+    // 直接使用硬编码的API Key，不依赖localStorage
+    const FINAL_API_KEY = RUNPOD_API_KEY
     
     console.log('Using API Key:', FINAL_API_KEY ? `${FINAL_API_KEY.substring(0, 10)}...` : 'NONE')
-    console.log('🔍 API Key Length:', FINAL_API_KEY ? FINAL_API_KEY.length : 0)
-    console.log('🔍 API Key Type:', typeof FINAL_API_KEY)
-    
-          // 如果没有配置API Key，直接使用模拟模式
-      if (!FINAL_API_KEY) {
-        console.log('No RunPod API key configured, using simulated responses')
-      }
 
     // 创建一个临时的助手消息用于流式显示
     let streamingMessage: Message | null = null
@@ -247,11 +206,16 @@ export default function ChatPage() {
       // 首先尝试RunPod API调用（如果有API Key）
       if (FINAL_API_KEY) {
         try {
-          // 准备对话历史 - 确保内容是字符串格式
+          // 准备对话历史 - 确保内容是字符串格式，过滤[object Object]
           const conversationHistory = history.map(msg => ({
             role: msg.role,
             content: typeof msg.content === 'string' ? msg.content : String(msg.content || '')
-          })).filter(msg => msg.content.trim() !== '' && msg.content !== '[object Object]')
+          })).filter(msg => {
+            const content = msg.content.trim()
+            return content !== '' && content !== '[object Object]' && content !== 'undefined' && content !== 'null'
+          })
+          
+          console.log('🗂️ 过滤后的对话历史:', conversationHistory)
           
           // 根据选择的模型确定系统模版和模型路径
           let systemTemplate = 'default'
@@ -270,11 +234,11 @@ export default function ChatPage() {
               max_tokens: 1000,
               temperature: 0.7,
               model_path: selectedModel.parameters,  // 传递实际的模型文件路径
-              stream: true  // 启用流式响应
+              stream: false  // 先关闭流式，确保基础功能正常
             }
           }
           
-          console.log('Sending RunPod request:', {
+          console.log('📤 发送到RunPod的请求:', {
             endpoint: RUNPOD_ENDPOINT,
             selectedModelId: selectedModel.id,
             payload: requestPayload
@@ -289,14 +253,33 @@ export default function ChatPage() {
             model: selectedModel.id
           }
 
+          // 如果是新对话的第一条消息，生成标题
+          let updatedSession = currentSession
+          if (currentSession && history.length === 0) {
+            const newTitle = generateChatTitle(userInput)
+            updatedSession = { ...currentSession, title: newTitle }
+            setCurrentSession(updatedSession)
+            setChatSessions(prev => 
+              prev.map(s => s.id === currentSession.id ? { ...s, title: newTitle } : s)
+            )
+          }
+
+          // 添加用户消息到会话
+          const userMessage: Message = {
+            id: (Date.now() - 1).toString(),
+            content: userInput,
+            role: 'user',
+            timestamp: new Date()
+          }
+
           // 添加到当前会话中
-          if (currentSession) {
-            const updatedMessages = [...(history.length > 0 ? history : currentSession.messages), streamingMessage]
-            const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+          if (updatedSession) {
+            const updatedMessages = [...(history.length > 0 ? history : updatedSession.messages), userMessage, streamingMessage]
+            updatedSession = { ...updatedSession, messages: updatedMessages, lastMessage: new Date() }
             
             setCurrentSession(updatedSession)
             setChatSessions(prev => 
-              prev.map(s => s.id === currentSession.id ? updatedSession : s)
+              prev.map(s => s.id === updatedSession!.id ? updatedSession! : s)
             )
           }
           
@@ -309,90 +292,92 @@ export default function ChatPage() {
             body: JSON.stringify(requestPayload)
           })
 
-          console.log('RunPod response status:', response.status)
+          console.log('📡 RunPod响应状态:', response.status)
           
           if (response.ok) {
             const data = await response.json()
-            console.log('RunPod Response:', data)
+            console.log('📦 RunPod完整响应:', data)
             
             let aiResponse = ''
-            // 处理不同的响应格式
-            if (data.status === "COMPLETED" && data.output) {
-              if (typeof data.output === 'string') {
-                aiResponse = data.output
-              } else if (data.output.text) {
-                aiResponse = data.output.text
-              } else if (data.output.response) {
-                aiResponse = data.output.response
-              } else {
-                aiResponse = data.output.toString()
+            
+            // 更强健的响应处理逻辑
+            if (data && typeof data === 'object') {
+              if (data.status === "COMPLETED" && data.output) {
+                // 处理RunPod标准格式
+                if (typeof data.output === 'string') {
+                  aiResponse = data.output.trim()
+                } else if (data.output && typeof data.output === 'object') {
+                  // 处理嵌套的output对象
+                  aiResponse = data.output.text || data.output.response || data.output.generated_text || 
+                              JSON.stringify(data.output)
+                }
+              } else if (data.output) {
+                // 直接使用output字段
+                aiResponse = typeof data.output === 'string' ? data.output.trim() : String(data.output)
+              } else if (data.result) {
+                // 有些API使用result字段
+                aiResponse = typeof data.result === 'string' ? data.result.trim() : String(data.result)
               }
-            } else if (data.output) {
-              // 直接使用output字段
-              aiResponse = typeof data.output === 'string' ? data.output : data.output.toString()
             }
             
-            console.log('🎯 提取的AI响应:', aiResponse)
+            // 最后的安全检查
+            if (!aiResponse || aiResponse === '[object Object]' || aiResponse === 'undefined') {
+              aiResponse = '抱歉，我无法生成回复，请重试。😔'
+            }
+            
+            console.log('🎯 最终提取的AI响应:', aiResponse)
             
             if (aiResponse && streamingMessage) {
-              // 模拟流式效果 - 逐字显示
+              // 实现流式效果 - 逐字显示
               await simulateStreamingResponse(aiResponse, streamingMessage)
               setIsLoading(false)
               return
             }
           } else {
-            console.log('RunPod API error:', response.status, await response.text())
+            const errorText = await response.text()
+            console.error('❌ RunPod API错误:', response.status, errorText)
           }
         } catch (apiError) {
-          console.log('RunPod API not available, using offline mode:', apiError)
+          console.error('❌ RunPod API调用异常:', apiError)
         }
       }
 
       // 如果API不可用，使用模拟回复
-      console.log('Using simulated AI response')
+      console.log('🤖 使用模拟AI响应')
       
       // 模拟AI思考时间
       await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
       
-      // 生成模拟的AI回复
+      // 生成模拟的AI回复（带表情符号）
       const simulatedResponses = [
-        `That's an interesting question about "${userInput}". Let me think about this... 🤔`,
-        `I understand you're asking about "${userInput}". Here's what I think: 💭`,
-        `Regarding "${userInput}", I can share some insights: ✨`,
-        `That's a great topic! About "${userInput}", here are my thoughts: 🎯`,
-        `Thanks for your question about "${userInput}". Here's my perspective: 📝`
-      ]
-      
-      const responseIntros = [
-        "Based on my understanding, ",
-        "From what I know, ",
-        "In my analysis, ",
-        "Generally speaking, ",
-        "To answer your question, "
+        `好的，关于"${userInput}"这个问题，让我想想... 🤔`,
+        `我理解您询问"${userInput}"的意思，这是我的想法： 💭`,
+        `关于"${userInput}"，我可以分享一些见解： ✨`,
+        `这是个很好的话题！关于"${userInput}"，以下是我的想法： 🎯`,
+        `感谢您的问题"${userInput}"，这是我的观点： 📝`
       ]
       
       const responseBodies = [
-        "this is a complex topic that involves multiple factors. The key considerations include user experience, technical implementation, and overall system design. 🔧",
-        "there are several approaches we could take. Each has its own advantages and potential challenges that we should carefully evaluate. ⚖️",
-        "this requires a balanced approach that takes into account both current capabilities and future scalability needs. 🚀",
-        "the most effective solution would likely involve combining modern best practices with proven methodologies. 💡",
-        "this is an area where careful planning and iterative development can lead to excellent results. 🎨"
+        "这是一个复杂的话题，涉及多个方面。需要考虑用户体验、技术实现和整体系统设计等关键因素。🔧",
+        "有几种方法可以考虑，每种都有其优势和潜在挑战，我们应该仔细评估。⚖️",
+        "这需要一个平衡的方法，既要考虑当前的功能需求，也要考虑未来的可扩展性。🚀",
+        "最有效的解决方案可能是结合现代最佳实践和经过验证的方法论。💡",
+        "这是一个需要仔细规划和迭代开发才能取得优秀结果的领域。🎨"
       ]
       
       const responseEndings = [
-        " Would you like me to elaborate on any specific aspect? 🤗",
-        " What are your thoughts on this approach? 💬",
-        " Is there a particular area you'd like to explore further? 🔍",
-        " Does this help address your question? ✅",
-        " Let me know if you need more details on any part of this. 📚"
+        "您希望我详细解释某个特定方面吗？🤗",
+        "您对这种方法有什么想法？💬", 
+        "有什么特定的领域您想进一步探讨吗？🔍",
+        "这有助于回答您的问题吗？✅",
+        "如果您需要更多细节，请告诉我。📚"
       ]
       
       const randomIntro = simulatedResponses[Math.floor(Math.random() * simulatedResponses.length)]
-      const randomBody = responseIntros[Math.floor(Math.random() * responseIntros.length)] + 
-                        responseBodies[Math.floor(Math.random() * responseBodies.length)]
+      const randomBody = responseBodies[Math.floor(Math.random() * responseBodies.length)]
       const randomEnding = responseEndings[Math.floor(Math.random() * responseEndings.length)]
       
-      const simulatedResponse = `${randomIntro}\n\n${randomBody}${randomEnding}`
+      const simulatedResponse = `${randomIntro}\n\n${randomBody}\n\n${randomEnding}`
 
       // 如果没有创建流式消息，创建一个
       if (!streamingMessage) {
@@ -404,13 +389,32 @@ export default function ChatPage() {
           model: selectedModel.id
         }
 
-        if (currentSession) {
-          const updatedMessages = [...(history.length > 0 ? history : currentSession.messages), streamingMessage]
-          const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+        // 如果是新对话的第一条消息，生成标题
+        let updatedSession = currentSession
+        if (currentSession && history.length === 0) {
+          const newTitle = generateChatTitle(userInput)
+          updatedSession = { ...currentSession, title: newTitle }
+          setCurrentSession(updatedSession)
+          setChatSessions(prev => 
+            prev.map(s => s.id === currentSession.id ? { ...s, title: newTitle } : s)
+          )
+        }
+
+        // 添加用户消息
+        const userMessage: Message = {
+          id: (Date.now() - 1).toString(),
+          content: userInput,
+          role: 'user',
+          timestamp: new Date()
+        }
+
+        if (updatedSession) {
+          const updatedMessages = [...(history.length > 0 ? history : updatedSession.messages), userMessage, streamingMessage]
+          updatedSession = { ...updatedSession, messages: updatedMessages, lastMessage: new Date() }
           
           setCurrentSession(updatedSession)
           setChatSessions(prev => 
-            prev.map(s => s.id === currentSession.id ? updatedSession : s)
+            prev.map(s => s.id === updatedSession!.id ? updatedSession! : s)
           )
         }
       }
@@ -419,10 +423,10 @@ export default function ChatPage() {
       await simulateStreamingResponse(simulatedResponse, streamingMessage)
       
     } catch (error) {
-      console.error('Error generating response:', error)
+      console.error('💥 生成响应时出错:', error)
       const errorMessage: Message = {
         id: Date.now().toString(),
-        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'} 😔`,
+        content: `抱歉，我遇到了一个错误：${error instanceof Error ? error.message : '未知错误'} 😔`,
         role: 'assistant',
         timestamp: new Date()
       }
@@ -603,23 +607,29 @@ export default function ChatPage() {
         <div className="flex-1 overflow-y-auto px-6">
           <h3 className="text-sm font-medium text-gray-600 mb-3">Your conversations</h3>
           <div className="space-y-2">
-            {filteredSessions.map((session) => (
+            {chatSessions.map((session) => (
               <button
                 key={session.id}
-                onClick={() => selectSession(session)}
-                className={`w-full text-left p-3 rounded-lg transition-all duration-200 ${
+                onClick={() => {
+                  setCurrentSession(session)
+                }}
+                className={`w-full text-left p-3 rounded-lg transition-colors ${
                   currentSession?.id === session.id
-                    ? 'bg-blue-50 border border-blue-200'
-                    : 'hover:bg-gray-50 border border-transparent'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
                 }`}
               >
-                <div className="flex items-start gap-3">
-                  <MessageSquare size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {session.title}
+                    <h3 className="font-medium truncate">
+                      {session.title && session.title !== 'New Chat' ? session.title : '新对话'}
+                    </h3>
+                    <p className="text-sm opacity-75 truncate">
+                      {session.messages.length > 0 
+                        ? `${session.messages.length} 条消息` 
+                        : '开始对话...'}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs opacity-60">
                       {session.lastMessage.toLocaleDateString()}
                     </p>
                   </div>
