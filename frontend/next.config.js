@@ -9,6 +9,7 @@ const nextConfig = {
   },
   assetPrefix: '',
   basePath: '',
+  generateBuildId: () => 'build-' + Date.now(),
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://api-text-generation.runpod.app',
     NEXT_PUBLIC_R2_BUCKET: process.env.NEXT_PUBLIC_R2_BUCKET || 'text-generation'
