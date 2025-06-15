@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
-  trailingSlash: false,
-  skipTrailingSlashRedirect: false,
+  trailingSlash: true,
+  skipTrailingSlashRedirect: true,
   distDir: 'out',
   images: {
     unoptimized: true
@@ -16,7 +16,13 @@ const nextConfig = {
   },
   experimental: {
     esmExternals: false
-  }
+  },
+  // 优化静态资源加载
+  poweredByHeader: false,
+  reactStrictMode: true,
+  swcMinify: true,
+  compress: true,
+  productionBrowserSourceMaps: false
 }
 
 module.exports = nextConfig 
