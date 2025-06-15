@@ -41,9 +41,7 @@ RUN pip3 install --no-cache-dir --only-binary=llama-cpp-python \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121 \
     "llama-cpp-python>=0.3.4"
 
-# 验证GPU安装
-COPY verify_gpu_install.py /tmp/verify_gpu_install.py
-RUN python3 /tmp/verify_gpu_install.py && rm /tmp/verify_gpu_install.py
+# GPU验证将在运行时进行（构建时无GPU驱动）
 
 # 复制所有必要文件
 COPY handler_llama_ai.py ./handler_llama_ai.py

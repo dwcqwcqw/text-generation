@@ -10,7 +10,6 @@ echo "  - Python版本: $(python3 --version)"
 export ARCHFLAGS="-arch x86_64"
 export GGML_CUDA=1
 export CUDA_VISIBLE_DEVICES=0
-export LLAMA_CUBLAS=1
 export CMAKE_CUDA_ARCHITECTURES="75;80;86;89"
 export FORCE_CMAKE=1
 export CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89"
@@ -23,6 +22,9 @@ echo "  - GGML_CUDA: $GGML_CUDA"
 echo "  - CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 echo "  - CMAKE_CUDA_ARCHITECTURES: $CMAKE_CUDA_ARCHITECTURES"
 echo "  - ARCHFLAGS: $ARCHFLAGS"
+
+echo "🔍 验证llama-cpp-python安装..."
+python3 -c "import pkg_resources; print(f'✅ llama-cpp-python {pkg_resources.get_distribution(\"llama-cpp-python\").version} 已安装')" || echo "⚠️ llama-cpp-python验证失败"
 
 echo "🔧 运行最终GPU修复..."
 python3 final_gpu_fix.py || echo "⚠️ GPU修复脚本执行完成（可能有警告）"
