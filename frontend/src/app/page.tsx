@@ -58,8 +58,10 @@ export default function ChatPage() {
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredSessions, setFilteredSessions] = useState<ChatSession[]>([])
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
+  const [autoSave, setAutoSave] = useState(true)
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'none' | 'saving' | 'saved' | 'local' | 'error'>('none')
+  const [apiHealthy, setApiHealthy] = useState<boolean | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 强制验证模型数量
@@ -473,23 +475,28 @@ export default function ChatPage() {
     }
 
     // 完成后自动保存聊天记录
-    if (autoSaveEnabled && currentSession && currentSession.messages.length >= 2) {
+    if (autoSave && currentSession && currentSession.messages.length >= 2) {
       try {
+        setSaveStatus('saving')
         console.log('💾 自动保存聊天记录到R2...')
         const saveResult = await autoSaveChatHistory(currentSession.messages, {
-          model: selectedModel.name,
-          sessionId: currentSession.id,
-          sessionTitle: currentSession.title
+          model: selectedModel.id,
+          persona: 'default',
+          temperature: 0.7,
+          timestamp: new Date().toISOString()
         })
         
         if (saveResult.success) {
-          setLastSaveTime(new Date())
           console.log('✅ 聊天记录已保存到R2:', saveResult.chatId)
+          setLastSaveTime(new Date())
+          setSaveStatus('storage' in saveResult && saveResult.storage === 'local' ? 'local' : 'saved')
         } else {
-          console.warn('⚠️ 聊天记录保存失败:', saveResult.error)
+          console.error('❌ 聊天记录保存失败:', 'error' in saveResult ? saveResult.error : 'Unknown error')
+          setSaveStatus('error')
         }
       } catch (error) {
         console.error('❌ 自动保存异常:', error)
+        setSaveStatus('error')
       }
     }
   }
@@ -696,12 +703,27 @@ export default function ChatPage() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {/* 存储状态指示器 */}
+                {saveStatus !== 'none' && (
+                  <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg ${
+                    saveStatus === 'saving' ? 'bg-yellow-100 text-yellow-700' :
+                    saveStatus === 'saved' ? 'bg-green-100 text-green-700' :
+                    saveStatus === 'local' ? 'bg-blue-100 text-blue-700' :
+                    saveStatus === 'error' ? 'bg-red-100 text-red-700' : ''
+                  }`}>
+                    {saveStatus === 'saving' && '⏳ 保存中...'}
+                    {saveStatus === 'saved' && '✅ 已保存到云端'}
+                    {saveStatus === 'local' && '📱 已保存到本地'}
+                    {saveStatus === 'error' && '❌ 保存失败'}
+                  </div>
+                )}
+                
                 {/* 自动保存开关 */}
                 <label className="flex items-center gap-2 text-sm text-gray-600">
                   <input
                     type="checkbox"
-                    checked={autoSaveEnabled}
-                    onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+                    checked={autoSave}
+                    onChange={(e) => setAutoSave(e.target.checked)}
                     className="rounded"
                   />
                   自动保存
@@ -712,18 +734,22 @@ export default function ChatPage() {
                   <button
                     onClick={async () => {
                       try {
+                        setSaveStatus('saving')
                         const saveResult = await autoSaveChatHistory(currentSession.messages, {
-                          model: selectedModel.name,
-                          sessionId: currentSession.id,
-                          sessionTitle: currentSession.title
+                          model: selectedModel.id,
+                          persona: 'default',
+                          temperature: 0.7
                         })
                         if (saveResult.success) {
                           setLastSaveTime(new Date())
-                          alert('✅ 聊天记录已保存到R2')
+                          setSaveStatus('storage' in saveResult && saveResult.storage === 'local' ? 'local' : 'saved')
+                          alert('✅ 聊天记录已保存')
                         } else {
-                          alert('❌ 保存失败: ' + saveResult.error)
+                          setSaveStatus('error')
+                          alert('❌ 保存失败: ' + ('error' in saveResult ? saveResult.error : 'Unknown error'))
                         }
                       } catch (error) {
+                        setSaveStatus('error')
                         alert('❌ 保存异常: ' + error)
                       }
                     }}

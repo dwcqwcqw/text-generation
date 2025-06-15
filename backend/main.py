@@ -6,7 +6,7 @@ import httpx
 import boto3
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
@@ -41,6 +41,19 @@ class Message(BaseModel):
     timestamp: datetime
     model: Optional[str] = None
 
+class ChatSession(BaseModel):
+    id: str
+    title: str
+    messages: List[Message]
+    created_at: datetime
+    updated_at: datetime
+    metadata: Optional[dict] = {}
+
+class ChatSaveRequest(BaseModel):
+    chat_id: str
+    messages: List[Message]
+    metadata: Optional[dict] = {}
+
 class ChatRequest(BaseModel):
     prompt: str
     model: str = "gpt2"
@@ -50,9 +63,9 @@ class ChatRequest(BaseModel):
 class ChatRequestLegacy(BaseModel):
     message: str
     model: str = "L3.2-8X3B"
-    history: List[Message] = []
-    max_tokens: int = 1000
-    temperature: float = 0.7
+    temperature: Optional[float] = 0.7
+    max_tokens: Optional[int] = 512
+    persona: Optional[str] = "default"
 
 class ChatResponse(BaseModel):
     response: str
@@ -62,6 +75,13 @@ class ChatResponse(BaseModel):
 class SimpleResponse(BaseModel):
     output: str
     generated_text: str
+
+class GenerateRequest(BaseModel):
+    prompt: str
+    model: str = "L3.2-8X3B"  
+    temperature: Optional[float] = 0.7
+    max_tokens: Optional[int] = 512
+    persona: Optional[str] = "default"
 
 # R2存储客户端
 def get_r2_client():
@@ -380,6 +400,149 @@ async def get_chat_history(date: str):
         
     except Exception as e:
         print(f"History error: {e}")
+        return {"chats": [], "error": str(e)}
+
+@app.post("/chat/save")
+async def save_chat_record(request: ChatSaveRequest):
+    """保存聊天记录到R2"""
+    try:
+        r2_client = get_r2_client()
+        if not r2_client:
+            return {"success": False, "error": "R2 storage not available"}
+        
+        # 准备聊天记录数据
+        chat_record = {
+            "id": request.chat_id,
+            "timestamp": datetime.now().isoformat(),
+            "messages": [msg.dict() for msg in request.messages],
+            "metadata": request.metadata or {}
+        }
+        
+        # 使用日期作为文件夹结构
+        date_prefix = datetime.now().strftime("%Y/%m/%d")
+        key = f"chats/{date_prefix}/{request.chat_id}.json"
+        
+        r2_client.put_object(
+            Bucket=R2_BUCKET,
+            Key=key,
+            Body=json.dumps(chat_record, ensure_ascii=False, default=str),
+            ContentType='application/json'
+        )
+        
+        print(f"Chat record saved to R2: {key}")
+        
+        return {
+            "success": True,
+            "chat_id": request.chat_id,
+            "storage_key": key,
+            "message": "Chat record saved successfully"
+        }
+        
+    except Exception as e:
+        print(f"Save chat error: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/chat/load/{chat_id}")
+async def load_chat_record(chat_id: str):
+    """从R2加载聊天记录"""
+    try:
+        r2_client = get_r2_client()
+        if not r2_client:
+            raise HTTPException(status_code=503, detail="R2 storage not available")
+        
+        # 尝试从今天开始向前查找聊天记录
+        for days_back in range(30):  # 查找最近30天
+            date = (datetime.now() - timedelta(days=days_back)).strftime("%Y/%m/%d")
+            key = f"chats/{date}/{chat_id}.json"
+            
+            try:
+                file_response = r2_client.get_object(
+                    Bucket=R2_BUCKET,
+                    Key=key
+                )
+                chat_data = json.loads(file_response['Body'].read())
+                print(f"Chat record loaded from R2: {key}")
+                return chat_data
+                
+            except r2_client.exceptions.NoSuchKey:
+                continue
+            except Exception as e:
+                print(f"Error loading chat {key}: {e}")
+                continue
+        
+        # 如果找不到聊天记录
+        raise HTTPException(status_code=404, detail="Chat record not found")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Load chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/chat/list")
+async def list_recent_chats(days: int = 7):
+    """列出最近的聊天记录"""
+    try:
+        r2_client = get_r2_client()
+        if not r2_client:
+            return {"chats": [], "message": "Storage not available"}
+        
+        all_chats = []
+        
+        # 查找最近几天的聊天记录
+        for days_back in range(days):
+            date = (datetime.now() - timedelta(days=days_back)).strftime("%Y/%m/%d")
+            prefix = f"chats/{date}/"
+            
+            try:
+                response = r2_client.list_objects_v2(
+                    Bucket=R2_BUCKET,
+                    Prefix=prefix
+                )
+                
+                if 'Contents' in response:
+                    for obj in response['Contents']:
+                        try:
+                            file_response = r2_client.get_object(
+                                Bucket=R2_BUCKET,
+                                Key=obj['Key']
+                            )
+                            chat_data = json.loads(file_response['Body'].read())
+                            
+                            # 提取聊天摘要信息
+                            first_user_msg = next(
+                                (msg for msg in chat_data.get('messages', []) if msg.get('role') == 'user'),
+                                None
+                            )
+                            
+                            chat_summary = {
+                                "id": chat_data.get('id'),
+                                "title": first_user_msg.get('content', 'Untitled Chat')[:50] + '...' if first_user_msg else 'Empty Chat',
+                                "timestamp": chat_data.get('timestamp'),
+                                "message_count": len(chat_data.get('messages', [])),
+                                "storage_key": obj['Key']
+                            }
+                            
+                            all_chats.append(chat_summary)
+                            
+                        except Exception as e:
+                            print(f"Error processing chat file {obj['Key']}: {e}")
+                            continue
+                            
+            except Exception as e:
+                print(f"Error listing chats for date {date}: {e}")
+                continue
+        
+        # 按时间戳排序，最新的在前
+        all_chats.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        
+        return {
+            "chats": all_chats[:50],  # 限制返回最近50个聊天
+            "total": len(all_chats)
+        }
+        
+    except Exception as e:
+        print(f"List chats error: {e}")
         return {"chats": [], "error": str(e)}
 
 if __name__ == "__main__":
