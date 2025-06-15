@@ -1,0 +1,11 @@
+/_next/static/css/*
+  Content-Type: text/css
+
+/_next/static/chunks/*.js
+  Content-Type: application/javascript
+
+/_next/static/*.js
+  Content-Type: application/javascript
+
+/*
+  X-Content-Type-Options: nosniff 

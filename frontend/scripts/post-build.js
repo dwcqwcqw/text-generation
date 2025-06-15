@@ -32,11 +32,22 @@ const redirectsContent = `# Cloudflare Pages - Next.js static export
 fs.writeFileSync(redirectsPath, redirectsContent, 'utf8');
 console.log('✅ Created minimal _redirects file');
 
-// Ensure no _headers file exists
+// Create _headers file for proper MIME types
 const headersPath = path.join(outDir, '_headers');
-if (fs.existsSync(headersPath)) {
-  fs.unlinkSync(headersPath);
-  console.log('✅ Removed _headers file');
-}
+const headersContent = `/_next/static/css/*
+  Content-Type: text/css
+
+/_next/static/chunks/*.js
+  Content-Type: application/javascript
+
+/_next/static/*.js
+  Content-Type: application/javascript
+
+/*
+  X-Content-Type-Options: nosniff
+`;
+
+fs.writeFileSync(headersPath, headersContent, 'utf8');
+console.log('✅ Created _headers file for proper MIME types');
 
 console.log('🎉 Post-build script completed successfully!'); 
