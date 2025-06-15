@@ -34,7 +34,13 @@ console.log('✅ Created minimal _redirects file');
 
 // Create _headers file for proper MIME types
 const headersPath = path.join(outDir, '_headers');
-const headersContent = `/_next/static/css/*
+const headersContent = `*.css
+  Content-Type: text/css
+
+*.js
+  Content-Type: application/javascript
+
+/_next/static/css/*.css
   Content-Type: text/css
 
 /_next/static/chunks/*.js
@@ -43,8 +49,8 @@ const headersContent = `/_next/static/css/*
 /_next/static/*.js
   Content-Type: application/javascript
 
-/*
-  X-Content-Type-Options: nosniff
+/_next/*
+  Cache-Control: public, max-age=31536000, immutable
 `;
 
 fs.writeFileSync(headersPath, headersContent, 'utf8');
