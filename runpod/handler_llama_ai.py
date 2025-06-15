@@ -109,38 +109,57 @@ def load_gguf_model(model_path: str) -> Tuple[Llama, str]:
         # 强制所有层到GPU，不管GPU大小
         logger.info(f"🎯 强制所有层到GPU (n_gpu_layers=-1)")
         
-        # 根据GPU显存调整配置
+        # 根据GPU显存调整配置 - 保守设置避免OOM
         if mem_total and mem_total > 40:  # RTX 4090等高端GPU
-            n_ctx = 131072     # 使用模型的完整上下文长度
-            n_batch = 2048     # 大批处理
-        elif mem_total and mem_total > 20:  # L4 GPU等
-            n_ctx = 65536      # 使用一半上下文
+            n_ctx = 32768      # 减少上下文长度
             n_batch = 1024     # 中等批处理
-        else:
-            n_ctx = 32768      # 使用四分之一上下文
+        elif mem_total and mem_total > 20:  # L4 GPU等
+            n_ctx = 16384      # 使用较小上下文
             n_batch = 512      # 小批处理
+        else:
+            n_ctx = 8192       # 使用最小上下文
+            n_batch = 256      # 最小批处理
         
         logger.info(f"🔧 GPU配置: n_gpu_layers=-1 (全部), n_ctx={n_ctx}, n_batch={n_batch}")
         
         # 强制GPU模式，使用所有可用的优化
-        model = Llama(
-            model_path=model_path,
-            n_ctx=n_ctx,              # 上下文长度
-            n_batch=n_batch,          # 批处理大小
-            n_gpu_layers=-1,          # 强制所有层到GPU
-            verbose=True,             # 显示详细日志以查看层分配
-            n_threads=1,              # 最少CPU线程，专注GPU
-            use_mmap=True,            # 使用内存映射
-            use_mlock=False,          # 不锁定内存
-            f16_kv=True,              # 使用FP16 KV缓存节省显存
-            logits_all=False,         # 不计算所有logits节省计算
-            # 强制CUDA后端
-            main_gpu=0,               # 使用第一个GPU
-            tensor_split=None,        # 不分割张量
-            rope_scaling_type=None,   # 不使用rope缩放
-            rope_freq_base=0.0,       # 使用默认频率基数
-            rope_freq_scale=0.0,      # 使用默认频率缩放
-        )
+        try:
+            model = Llama(
+                model_path=model_path,
+                n_ctx=n_ctx,              # 上下文长度
+                n_batch=n_batch,          # 批处理大小
+                n_gpu_layers=-1,          # 强制所有层到GPU
+                verbose=True,             # 显示详细日志以查看层分配
+                n_threads=1,              # 最少CPU线程，专注GPU
+                use_mmap=True,            # 使用内存映射
+                use_mlock=False,          # 不锁定内存
+                f16_kv=True,              # 使用FP16 KV缓存节省显存
+                logits_all=False,         # 不计算所有logits节省计算
+                # 强制CUDA后端
+                main_gpu=0,               # 使用第一个GPU
+                tensor_split=None,        # 不分割张量
+                rope_scaling_type=None,   # 不使用rope缩放
+                rope_freq_base=0.0,       # 使用默认频率基数
+                rope_freq_scale=0.0,      # 使用默认频率缩放
+            )
+        except Exception as gpu_error:
+            # 如果GPU加载失败，尝试更保守的设置
+            logger.warning(f"⚠️ GPU加载失败，尝试更保守的设置: {gpu_error}")
+            logger.info("🔄 尝试减少内存使用...")
+            
+            model = Llama(
+                model_path=model_path,
+                n_ctx=4096,               # 最小上下文
+                n_batch=128,              # 最小批处理
+                n_gpu_layers=-1,          # 仍然尝试GPU
+                verbose=True,
+                n_threads=1,
+                use_mmap=True,
+                use_mlock=False,
+                f16_kv=True,
+                logits_all=False,
+                main_gpu=0,
+            )
         
         logger.info("✅ 模型GPU加载成功")
         check_gpu_usage()  # 显示加载后的GPU状态
@@ -148,17 +167,7 @@ def load_gguf_model(model_path: str) -> Tuple[Llama, str]:
         
     except Exception as e:
         logger.error(f"❌ GGUF模型加载失败: {e}")
-        # 尝试重新安装llama-cpp-python with CUDA
-        logger.info("🔄 尝试重新安装CUDA版本的llama-cpp-python...")
-        try:
-            subprocess.run([
-                "pip", "install", "--force-reinstall", "--no-cache-dir",
-                "llama-cpp-python", "--extra-index-url", 
-                "https://abetlen.github.io/llama-cpp-python/whl/cu121"
-            ], check=True)
-            logger.info("✅ 重新安装完成，请重启容器")
-        except Exception as install_error:
-            logger.error(f"❌ 重新安装失败: {install_error}")
+        logger.error("💡 提示：如果是GPU内存不足，请尝试使用更小的模型或重启容器")
         raise e
 
 def initialize_model():
