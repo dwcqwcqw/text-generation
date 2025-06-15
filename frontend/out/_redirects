@@ -1,2 +1,6 @@
-# SPA Fallback for Next.js static export
-/*    /   200 
+# Static assets should be served directly
+/_next/static/*  /_next/static/:splat  200
+/static/*        /static/:splat        200
+
+# SPA Fallback for Next.js static export - only for HTML routes
+/*    /index.html   200
