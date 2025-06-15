@@ -261,8 +261,6 @@ def initialize_model():
                 f16_kv=True,           # 使用FP16存储KV缓存
                 logits_all=False,      # 只计算最后一个token的logits
                 vocab_only=False,      # 加载完整模型
-                use_mmap=True,         # 使用内存映射
-                use_mlock=False,       # 避免内存锁定
                 embedding=False,       # 不使用嵌入模式
                 n_gqa=None,            # 自动检测GQA
                 rms_norm_eps=5e-6,     # RMS归一化epsilon
