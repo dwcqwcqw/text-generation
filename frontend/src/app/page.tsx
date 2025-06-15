@@ -232,6 +232,9 @@ export default function ChatPage() {
       if (!FINAL_API_KEY) {
         console.log('No RunPod API key configured, using simulated responses')
       }
+
+    // 创建一个临时的助手消息用于流式显示
+    let streamingMessage: Message | null = null
     
     try {
       console.log('RunPod API Configuration:', {
@@ -266,7 +269,8 @@ export default function ChatPage() {
               history: conversationHistory,
               max_tokens: 1000,
               temperature: 0.7,
-              model_path: selectedModel.parameters  // 传递实际的模型文件路径
+              model_path: selectedModel.parameters,  // 传递实际的模型文件路径
+              stream: true  // 启用流式响应
             }
           }
           
@@ -275,6 +279,26 @@ export default function ChatPage() {
             selectedModelId: selectedModel.id,
             payload: requestPayload
           })
+
+          // 创建流式响应的临时消息
+          streamingMessage = {
+            id: Date.now().toString(),
+            content: '',
+            role: 'assistant',
+            timestamp: new Date(),
+            model: selectedModel.id
+          }
+
+          // 添加到当前会话中
+          if (currentSession) {
+            const updatedMessages = [...(history.length > 0 ? history : currentSession.messages), streamingMessage]
+            const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+            
+            setCurrentSession(updatedSession)
+            setChatSessions(prev => 
+              prev.map(s => s.id === currentSession.id ? updatedSession : s)
+            )
+          }
           
           const response = await fetch(RUNPOD_ENDPOINT, {
             method: 'POST',
@@ -292,50 +316,27 @@ export default function ChatPage() {
             console.log('RunPod Response:', data)
             
             let aiResponse = ''
-            // 我们的handler直接返回字符串作为output
+            // 处理不同的响应格式
             if (data.status === "COMPLETED" && data.output) {
+              if (typeof data.output === 'string') {
+                aiResponse = data.output
+              } else if (data.output.text) {
+                aiResponse = data.output.text
+              } else if (data.output.response) {
+                aiResponse = data.output.response
+              } else {
+                aiResponse = data.output.toString()
+              }
+            } else if (data.output) {
+              // 直接使用output字段
               aiResponse = typeof data.output === 'string' ? data.output : data.output.toString()
             }
             
-            if (aiResponse) {
-              const assistantMessage: Message = {
-                id: Date.now().toString(),
-                content: aiResponse,
-                role: 'assistant',
-                timestamp: new Date(),
-                model: selectedModel.id
-              }
-
-              if (currentSession) {
-                const updatedMessages = [...(history.length > 0 ? history : currentSession.messages), assistantMessage]
-                const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
-                
-                setCurrentSession(updatedSession)
-                setChatSessions(prev => 
-                  prev.map(s => s.id === currentSession.id ? updatedSession : s)
-                )
-
-                // 自动保存聊天记录到R2
-                if (autoSaveEnabled && updatedMessages.length >= 2) {
-                  try {
-                    console.log('💾 自动保存聊天记录到R2...')
-                    const saveResult = await autoSaveChatHistory(updatedMessages, {
-                      model: selectedModel.name,
-                      sessionId: currentSession.id,
-                      sessionTitle: currentSession.title
-                    })
-                    
-                    if (saveResult.success) {
-                      setLastSaveTime(new Date())
-                      console.log('✅ 聊天记录已保存到R2:', saveResult.chatId)
-                    } else {
-                      console.warn('⚠️ 聊天记录保存失败:', saveResult.error)
-                    }
-                  } catch (error) {
-                    console.error('❌ 自动保存异常:', error)
-                  }
-                }
-              }
+            console.log('🎯 提取的AI响应:', aiResponse)
+            
+            if (aiResponse && streamingMessage) {
+              // 模拟流式效果 - 逐字显示
+              await simulateStreamingResponse(aiResponse, streamingMessage)
               setIsLoading(false)
               return
             }
@@ -355,11 +356,11 @@ export default function ChatPage() {
       
       // 生成模拟的AI回复
       const simulatedResponses = [
-        `That's an interesting question about "${userInput}". Let me think about this...`,
-        `I understand you're asking about "${userInput}". Here's what I think:`,
-        `Regarding "${userInput}", I can share some insights:`,
-        `That's a great topic! About "${userInput}", here are my thoughts:`,
-        `Thanks for your question about "${userInput}". Here's my perspective:`
+        `That's an interesting question about "${userInput}". Let me think about this... 🤔`,
+        `I understand you're asking about "${userInput}". Here's what I think: 💭`,
+        `Regarding "${userInput}", I can share some insights: ✨`,
+        `That's a great topic! About "${userInput}", here are my thoughts: 🎯`,
+        `Thanks for your question about "${userInput}". Here's my perspective: 📝`
       ]
       
       const responseIntros = [
@@ -371,19 +372,19 @@ export default function ChatPage() {
       ]
       
       const responseBodies = [
-        "this is a complex topic that involves multiple factors. The key considerations include user experience, technical implementation, and overall system design.",
-        "there are several approaches we could take. Each has its own advantages and potential challenges that we should carefully evaluate.",
-        "this requires a balanced approach that takes into account both current capabilities and future scalability needs.",
-        "the most effective solution would likely involve combining modern best practices with proven methodologies.",
-        "this is an area where careful planning and iterative development can lead to excellent results."
+        "this is a complex topic that involves multiple factors. The key considerations include user experience, technical implementation, and overall system design. 🔧",
+        "there are several approaches we could take. Each has its own advantages and potential challenges that we should carefully evaluate. ⚖️",
+        "this requires a balanced approach that takes into account both current capabilities and future scalability needs. 🚀",
+        "the most effective solution would likely involve combining modern best practices with proven methodologies. 💡",
+        "this is an area where careful planning and iterative development can lead to excellent results. 🎨"
       ]
       
       const responseEndings = [
-        " Would you like me to elaborate on any specific aspect?",
-        " What are your thoughts on this approach?",
-        " Is there a particular area you'd like to explore further?",
-        " Does this help address your question?",
-        " Let me know if you need more details on any part of this."
+        " Would you like me to elaborate on any specific aspect? 🤗",
+        " What are your thoughts on this approach? 💬",
+        " Is there a particular area you'd like to explore further? 🔍",
+        " Does this help address your question? ✅",
+        " Let me know if you need more details on any part of this. 📚"
       ]
       
       const randomIntro = simulatedResponses[Math.floor(Math.random() * simulatedResponses.length)]
@@ -392,51 +393,36 @@ export default function ChatPage() {
       const randomEnding = responseEndings[Math.floor(Math.random() * responseEndings.length)]
       
       const simulatedResponse = `${randomIntro}\n\n${randomBody}${randomEnding}`
-      
-      const assistantMessage: Message = {
-        id: Date.now().toString(),
-        content: simulatedResponse,
-        role: 'assistant',
-        timestamp: new Date(),
-        model: selectedModel.id
-      }
 
-      if (currentSession) {
-        const updatedMessages = [...(history.length > 0 ? history : currentSession.messages), assistantMessage]
-        const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
-        
-        setCurrentSession(updatedSession)
-        setChatSessions(prev => 
-          prev.map(s => s.id === currentSession.id ? updatedSession : s)
-        )
+      // 如果没有创建流式消息，创建一个
+      if (!streamingMessage) {
+        streamingMessage = {
+          id: Date.now().toString(),
+          content: '',
+          role: 'assistant',
+          timestamp: new Date(),
+          model: selectedModel.id
+        }
 
-        // 自动保存聊天记录到R2
-        if (autoSaveEnabled && updatedMessages.length >= 2) {
-          try {
-            console.log('💾 自动保存聊天记录到R2...')
-            const saveResult = await autoSaveChatHistory(updatedMessages, {
-              model: selectedModel.name,
-              sessionId: currentSession.id,
-              sessionTitle: currentSession.title
-            })
-            
-            if (saveResult.success) {
-              setLastSaveTime(new Date())
-              console.log('✅ 聊天记录已保存到R2:', saveResult.chatId)
-            } else {
-              console.warn('⚠️ 聊天记录保存失败:', saveResult.error)
-            }
-          } catch (error) {
-            console.error('❌ 自动保存异常:', error)
-          }
+        if (currentSession) {
+          const updatedMessages = [...(history.length > 0 ? history : currentSession.messages), streamingMessage]
+          const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+          
+          setCurrentSession(updatedSession)
+          setChatSessions(prev => 
+            prev.map(s => s.id === currentSession.id ? updatedSession : s)
+          )
         }
       }
+
+      // 模拟流式响应
+      await simulateStreamingResponse(simulatedResponse, streamingMessage)
       
     } catch (error) {
       console.error('Error generating response:', error)
       const errorMessage: Message = {
         id: Date.now().toString(),
-        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'} 😔`,
         role: 'assistant',
         timestamp: new Date()
       }
@@ -453,6 +439,55 @@ export default function ChatPage() {
     }
 
     setIsLoading(false)
+  }
+
+  // 模拟流式响应效果
+  const simulateStreamingResponse = async (fullResponse: string, messageToUpdate: Message) => {
+    const words = fullResponse.split(' ')
+    let currentContent = ''
+    
+    for (let i = 0; i < words.length; i++) {
+      currentContent += (i > 0 ? ' ' : '') + words[i]
+      
+      // 更新消息内容
+      if (currentSession) {
+        const updatedMessages = currentSession.messages.map(msg => 
+          msg.id === messageToUpdate.id 
+            ? { ...msg, content: currentContent }
+            : msg
+        )
+        const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+        
+        setCurrentSession(updatedSession)
+        setChatSessions(prev => 
+          prev.map(s => s.id === currentSession.id ? updatedSession : s)
+        )
+      }
+      
+      // 控制流式速度
+      await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100))
+    }
+
+    // 完成后自动保存聊天记录
+    if (autoSaveEnabled && currentSession && currentSession.messages.length >= 2) {
+      try {
+        console.log('💾 自动保存聊天记录到R2...')
+        const saveResult = await autoSaveChatHistory(currentSession.messages, {
+          model: selectedModel.name,
+          sessionId: currentSession.id,
+          sessionTitle: currentSession.title
+        })
+        
+        if (saveResult.success) {
+          setLastSaveTime(new Date())
+          console.log('✅ 聊天记录已保存到R2:', saveResult.chatId)
+        } else {
+          console.warn('⚠️ 聊天记录保存失败:', saveResult.error)
+        }
+      } catch (error) {
+        console.error('❌ 自动保存异常:', error)
+      }
+    }
   }
 
   const handleSendMessage = async () => {

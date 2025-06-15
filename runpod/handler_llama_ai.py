@@ -218,14 +218,14 @@ def format_prompt(prompt: str, persona: str = "default") -> str:
     prompt = prompt.replace("<|begin_of_text|>", "")  # 先移除所有BOS标记
     prompt = prompt.strip()
     
-    # 根据人格设置系统提示词
+    # 根据人格设置系统提示词 - 添加表情和简洁回复要求
     system_prompts = {
-        "default": "You are a helpful, intelligent AI assistant for general conversations.",
-        "creative": "You are a creative AI assistant specialized in creative writing, storytelling, and fiction.",
-        "professional": "You are a professional AI assistant providing formal, structured responses for business and analysis.",
-        "casual": "You are a friendly, relaxed AI assistant with a conversational style.",
-        "technical": "You are a technical AI assistant with expertise in programming, technology, and engineering.",
-        "chinese": "你是一个专业的中文AI助手，理解中文文化背景。"
+        "default": "You are a helpful, intelligent AI assistant for general conversations. 回复尽量的言简意赅，并且灵活的使用各种表情符号来增加亲和力。Keep responses concise and use emojis appropriately.",
+        "creative": "You are a creative AI assistant specialized in creative writing, storytelling, and fiction. 回复尽量的言简意赅，并且灵活的使用各种表情符号。Be creative and expressive with emojis.",
+        "professional": "You are a professional AI assistant providing formal, structured responses for business and analysis. 回复尽量的言简意赅，适当使用表情符号。Maintain professionalism while being concise.",
+        "casual": "You are a friendly, relaxed AI assistant with a conversational style. 回复尽量的言简意赅，并且灵活的使用各种表情符号。Be casual and use lots of emojis!",
+        "technical": "You are a technical AI assistant with expertise in programming, technology, and engineering. 回复尽量的言简意赅，并且适当使用表情符号。Be precise and use relevant emojis.",
+        "chinese": "你是一个专业的中文AI助手，理解中文文化背景。回复尽量的言简意赅，并且灵活的使用各种表情符号来增加亲和力。"
     }
     
     system_prompt = system_prompts.get(persona, system_prompts["default"])
@@ -241,14 +241,14 @@ def format_prompt(prompt: str, persona: str = "default") -> str:
     
     return formatted_prompt
 
-def generate_response(prompt: str, persona: str = "default") -> str:
-    """生成AI响应"""
+def generate_response(prompt: str, persona: str = "default", stream: bool = False) -> str:
+    """生成AI响应，支持流式输出"""
     global model
     
     if not model:
         raise Exception("模型未初始化")
     
-    logger.info(f"💭 生成响应 (人格: {persona})")
+    logger.info(f"💭 生成响应 (人格: {persona}, 流式: {stream})")
     logger.info(f"📝 原始输入: '{prompt}'")
     
     # 清理提示词
@@ -261,54 +261,81 @@ def generate_response(prompt: str, persona: str = "default") -> str:
     start_time = time.time()
     
     try:
-        # 生成响应
+        # 生成响应 - 增加max_tokens以支持更完整的回复
         response = model(
             formatted_prompt,
-            max_tokens=256,       # 减少token数量
+            max_tokens=512,       # 增加token数量以支持完整回复
             temperature=0.7,
             top_p=0.9,
             top_k=40,
             repeat_penalty=1.1,
             stop=["<|eot_id|>", "<|end_of_text|>", "\n\n---", "<|start_header_id|>"],
             echo=False,           # 不回显输入
-            stream=False
+            stream=stream         # 支持流式输出
         )
         
-        # 提取响应文本
-        response_text = ""
-        if isinstance(response, dict) and 'choices' in response:
-            if len(response['choices']) > 0:
-                response_text = response['choices'][0].get('text', '').strip()
+        # 处理流式响应
+        if stream:
+            # 如果是流式响应，返回生成器
+            def stream_generator():
+                full_response = ""
+                for chunk in response:
+                    if isinstance(chunk, dict) and 'choices' in chunk:
+                        if len(chunk['choices']) > 0:
+                            delta = chunk['choices'][0].get('delta', {})
+                            content = delta.get('content', '')
+                            if content:
+                                full_response += content
+                                yield content
+                    else:
+                        content = str(chunk).strip()
+                        if content:
+                            full_response += content
+                            yield content
+                
+                # 记录完整响应
+                generation_time = time.time() - start_time
+                check_gpu_usage()
+                logger.info(f"⚡ 流式生成完成: {generation_time:.2f}秒")
+                logger.info(f"📤 完整响应: '{full_response}' (长度: {len(full_response)})")
+            
+            return stream_generator()
         else:
-            response_text = str(response).strip()
-        
-        generation_time = time.time() - start_time
-        
-        # 检查生成后GPU状态
-        check_gpu_usage()
-        
-        logger.info(f"⚡ 生成完成: {generation_time:.2f}秒")
-        logger.info(f"📤 原始响应: '{response_text}'")
-        
-        # 清理响应文本
-        if response_text:
-            # 移除可能的格式标记
-            response_text = response_text.replace('<|eot_id|>', '').replace('<|end_of_text|>', '').strip()
-            logger.info(f"📤 清理后响应: '{response_text}' (长度: {len(response_text)})")
-        
-        # 如果响应为空，返回默认消息
-        if not response_text:
-            response_text = "我理解了您的问题，但目前无法提供具体回答。请尝试重新表述您的问题。"
-            logger.warning("⚠️ 响应为空，使用默认消息")
-        
-        return response_text
+            # 非流式响应
+            response_text = ""
+            if isinstance(response, dict) and 'choices' in response:
+                if len(response['choices']) > 0:
+                    response_text = response['choices'][0].get('text', '').strip()
+            else:
+                response_text = str(response).strip()
+            
+            generation_time = time.time() - start_time
+            
+            # 检查生成后GPU状态
+            check_gpu_usage()
+            
+            logger.info(f"⚡ 生成完成: {generation_time:.2f}秒")
+            logger.info(f"📤 原始响应: '{response_text}'")
+            
+            # 清理响应文本
+            if response_text:
+                # 移除可能的格式标记
+                response_text = response_text.replace('<|eot_id|>', '').replace('<|end_of_text|>', '').strip()
+                logger.info(f"📤 清理后响应: '{response_text}' (长度: {len(response_text)})")
+            
+            # 如果响应为空，返回默认消息
+            if not response_text:
+                response_text = "我理解了您的问题，但目前无法提供具体回答。请尝试重新表述您的问题。😊"
+                logger.warning("⚠️ 响应为空，使用默认消息")
+            
+            return response_text
         
     except Exception as e:
         logger.error(f"❌ 生成响应失败: {e}")
-        return f"抱歉，生成响应时出现错误: {str(e)}"
+        return f"抱歉，生成响应时出现错误: {str(e)} 😔"
 
 def handler(event):
-    """RunPod处理函数"""
+    """RunPod处理函数 - 支持流式响应"""
     global model, model_path
     
     try:
@@ -320,10 +347,12 @@ def handler(event):
         prompt = input_data.get("prompt", "").strip()
         persona = input_data.get("persona", "default")
         requested_model_path = input_data.get("model_path", "")  # 前端指定的模型路径
+        stream = input_data.get("stream", False)  # 是否启用流式响应
         
         logger.info(f"📝 提取的提示词: '{prompt}'")
         logger.info(f"👤 人格设置: '{persona}'")
         logger.info(f"🎯 请求的模型: '{requested_model_path}'")
+        logger.info(f"🌊 流式响应: {stream}")
         
         if not prompt:
             # RunPod格式的错误响应
@@ -347,13 +376,23 @@ def handler(event):
             initialize_model()
         
         # 生成响应
-        response = generate_response(prompt, persona)
+        response = generate_response(prompt, persona, stream)
+        
+        # 处理流式响应
+        if stream and hasattr(response, '__iter__'):
+            # 对于流式响应，我们需要收集所有chunks并返回完整响应
+            # 因为RunPod serverless不直接支持流式响应
+            full_response = ""
+            for chunk in response:
+                full_response += chunk
+            response = full_response
         
         # 返回RunPod标准格式
         result = {
             "status": "COMPLETED",  # 前端期望的状态
             "output": response,     # 前端期望的输出字段
-            "model_info": f"模型: {os.path.basename(model_path) if model_path else 'unknown'}"
+            "model_info": f"模型: {os.path.basename(model_path) if model_path else 'unknown'}",
+            "stream": stream        # 标记是否为流式响应
         }
         
         logger.info(f"✅ 最终返回结果: {json.dumps(result, indent=2, ensure_ascii=False)}")
@@ -364,7 +403,7 @@ def handler(event):
         # RunPod格式的错误响应
         error_result = {
             "status": "FAILED",
-            "error": f"处理请求时出现错误: {str(e)}",
+            "error": f"处理请求时出现错误: {str(e)} 😔",
             "output": None
         }
         logger.error(f"❌ 错误返回: {json.dumps(error_result, ensure_ascii=False)}")
