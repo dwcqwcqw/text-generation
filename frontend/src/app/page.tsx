@@ -372,15 +372,20 @@ export default function ChatPage() {
             console.log('🎯 AI响应类型:', typeof aiResponse)
             console.log('🎯 AI响应长度:', aiResponse.length)
             
-            // 最后的安全检查
-            if (!aiResponse || aiResponse === '[object Object]' || aiResponse === 'undefined' || aiResponse === 'null') {
-              console.log('❌ AI响应无效，使用默认消息')
-              aiResponse = '抱歉，我无法生成回复，请重试。😔'
-            } else {
-              console.log('✅ AI响应有效，长度:', aiResponse.length)
+            // 强制确保aiResponse是字符串类型
+            if (typeof aiResponse !== 'string') {
+              console.log('⚠️ aiResponse不是字符串，强制转换:', typeof aiResponse)
+              aiResponse = String(aiResponse)
             }
             
-            console.log('🎯 最终提取的AI响应:', aiResponse)
+            // 再次验证响应有效性
+            if (!aiResponse || aiResponse === '[object Object]' || aiResponse === 'undefined' || aiResponse === 'null' || aiResponse.trim() === '') {
+              console.log('❌ AI响应无效或为空，使用默认消息')
+              aiResponse = '抱歉，我无法生成回复，请重试。😔'
+            }
+            
+            console.log('🎯 最终确认的AI响应 (字符串):', aiResponse)
+            console.log('🎯 字符串长度:', aiResponse.length)
             
             if (aiResponse && streamingMessage) {
               // 实现流式效果 - 逐字显示
