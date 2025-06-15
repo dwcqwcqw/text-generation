@@ -247,11 +247,11 @@ export default function ChatPage() {
       // 首先尝试RunPod API调用（如果有API Key）
       if (FINAL_API_KEY) {
         try {
-          // 准备对话历史
+          // 准备对话历史 - 确保内容是字符串格式
           const conversationHistory = history.map(msg => ({
             role: msg.role,
-            content: msg.content
-          }))
+            content: typeof msg.content === 'string' ? msg.content : String(msg.content || '')
+          })).filter(msg => msg.content.trim() !== '' && msg.content !== '[object Object]')
           
           // 根据选择的模型确定系统模版和模型路径
           let systemTemplate = 'default'

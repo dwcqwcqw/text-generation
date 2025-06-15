@@ -210,13 +210,13 @@ def initialize_model():
     logger.info(f"✅ 模型初始化完成: {model_path}")
     return True
 
-def format_prompt(prompt: str, persona: str = "default") -> str:
-    """格式化提示词，避免重复BOS标记"""
+def format_prompt(prompt: str, persona: str = "default", history: list = None) -> str:
+    """格式化提示词，避免重复BOS标记，支持对话历史"""
     
-    # 首先清理可能的重复BOS标记
-    prompt = prompt.replace("<|begin_of_text|><|begin_of_text|>", "<|begin_of_text|>")
-    prompt = prompt.replace("<|begin_of_text|>", "")  # 先移除所有BOS标记
-    prompt = prompt.strip()
+    # 清理输入提示词
+    prompt = str(prompt).strip()
+    if not prompt:
+        prompt = "Hello"
     
     # 根据人格设置系统提示词 - 添加表情和简洁回复要求
     system_prompts = {
@@ -230,19 +230,30 @@ def format_prompt(prompt: str, persona: str = "default") -> str:
     
     system_prompt = system_prompts.get(persona, system_prompts["default"])
     
-    # 使用正确的Llama-3.2格式，只添加一次BOS标记
-    formatted_prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-
-{system_prompt}<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-
-"""
+    # 构建对话历史
+    conversation = f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
     
-    return formatted_prompt
+    # 添加历史对话
+    if history:
+        for msg in history:
+            if isinstance(msg, dict):
+                role = msg.get('role', 'user')
+                content = str(msg.get('content', '')).strip()
+                
+                # 跳过空内容或无效内容
+                if not content or content == '[object Object]':
+                    continue
+                    
+                if role in ['user', 'assistant']:
+                    conversation += f"<|start_header_id|>{role}<|end_header_id|>\n\n{content}<|eot_id|>"
+    
+    # 添加当前用户输入
+    conversation += f"<|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+    
+    return conversation
 
-def generate_response(prompt: str, persona: str = "default", stream: bool = False) -> str:
-    """生成AI响应，支持流式输出"""
+def generate_response(prompt: str, persona: str = "default", history: list = None, stream: bool = False) -> str:
+    """生成AI响应，支持流式输出和对话历史"""
     global model
     
     if not model:
@@ -250,9 +261,11 @@ def generate_response(prompt: str, persona: str = "default", stream: bool = Fals
     
     logger.info(f"💭 生成响应 (人格: {persona}, 流式: {stream})")
     logger.info(f"📝 原始输入: '{prompt}'")
+    if history:
+        logger.info(f"📚 历史记录数量: {len(history)}")
     
-    # 清理提示词
-    formatted_prompt = format_prompt(prompt, persona)
+    # 清理提示词并包含历史记录
+    formatted_prompt = format_prompt(prompt, persona, history)
     logger.info(f"📝 格式化后长度: {len(formatted_prompt)}")
     
     # 检查生成前GPU状态
@@ -335,7 +348,7 @@ def generate_response(prompt: str, persona: str = "default", stream: bool = Fals
         return f"抱歉，生成响应时出现错误: {str(e)} 😔"
 
 def handler(event):
-    """RunPod处理函数 - 支持流式响应"""
+    """RunPod处理函数 - 支持流式响应和对话历史"""
     global model, model_path
     
     try:
@@ -345,8 +358,9 @@ def handler(event):
         # 获取输入
         input_data = event.get("input", {})
         prompt = input_data.get("prompt", "").strip()
-        persona = input_data.get("persona", "default")
+        persona = input_data.get("system_template", input_data.get("persona", "default"))
         requested_model_path = input_data.get("model_path", "")  # 前端指定的模型路径
+        history = input_data.get("history", [])  # 对话历史
         stream = input_data.get("stream", False)  # 是否启用流式响应
         
         logger.info(f"📝 提取的提示词: '{prompt}'")
@@ -375,8 +389,8 @@ def handler(event):
             logger.info("🔄 模型未初始化，开始初始化...")
             initialize_model()
         
-        # 生成响应
-        response = generate_response(prompt, persona, stream)
+        # 生成响应，包含历史记录
+        response = generate_response(prompt, persona, history, stream)
         
         # 处理流式响应
         if stream and hasattr(response, '__iter__'):
