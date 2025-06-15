@@ -310,55 +310,49 @@ export default function ChatPage() {
             if (data && typeof data === 'object') {
               console.log('✅ data是有效对象')
               
-              // 检查status
-              console.log('🔍 status:', data.status)
-              
               // 检查output字段
               console.log('🔍 output存在:', 'output' in data)
               console.log('🔍 output类型:', typeof data.output)
               console.log('🔍 output内容:', data.output)
               
-              // 无论status如何，只要有output就处理
+              // 直接处理output字段 - 简化逻辑
               if (data.output !== null && data.output !== undefined) {
                 console.log('✅ 发现output字段，开始处理')
                 
-                if (typeof data.output === 'string') {
-                  console.log('✅ output是字符串类型')
-                  aiResponse = data.output.trim()
-                  console.log('✅ 提取的字符串响应:', aiResponse)
-                } else if (data.output && typeof data.output === 'object') {
-                  console.log('⚠️ output是对象类型，尝试解析...')
-                  console.log('🔍 output对象内容:', JSON.stringify(data.output, null, 2))
-                  
-                  // 尝试多种可能的字段名
-                  const possibleFields = ['text', 'response', 'generated_text', 'content', 'message']
-                  for (const field of possibleFields) {
-                    if (data.output[field] && typeof data.output[field] === 'string') {
-                      aiResponse = data.output[field].trim()
-                      console.log(`✅ 从output.${field}提取响应:`, aiResponse)
-                      break
+                // 直接将output转换为字符串，无论它是什么类型
+                aiResponse = String(data.output).trim()
+                console.log('✅ 转换后的响应:', aiResponse)
+                
+                // 如果转换后是[object Object]，尝试JSON解析
+                if (aiResponse === '[object Object]') {
+                  console.log('⚠️ 检测到[object Object]，尝试JSON解析')
+                  if (typeof data.output === 'object') {
+                    // 尝试从对象中提取文本
+                    if (data.output.text) {
+                      aiResponse = String(data.output.text).trim()
+                    } else if (data.output.response) {
+                      aiResponse = String(data.output.response).trim()
+                    } else if (data.output.content) {
+                      aiResponse = String(data.output.content).trim()
+                    } else {
+                      // 如果没有找到合适的字段，使用JSON字符串
+                      aiResponse = JSON.stringify(data.output)
                     }
+                    console.log('✅ 从对象提取的响应:', aiResponse)
                   }
-                  
-                  // 如果还是没找到，尝试序列化整个对象
-                  if (!aiResponse) {
-                    console.log('⚠️ 未找到有效字段，序列化整个output对象')
-                    aiResponse = JSON.stringify(data.output)
-                  }
-                } else {
-                  console.log('⚠️ output既不是字符串也不是对象，强制转换为字符串')
-                  aiResponse = String(data.output)
                 }
               } else if (data.result) {
                 console.log('⚠️ 没有output，尝试使用result字段')
-                aiResponse = typeof data.result === 'string' ? data.result.trim() : String(data.result)
+                aiResponse = String(data.result).trim()
                 console.log('📤 使用result:', aiResponse)
               } else {
                 console.log('❌ 没有找到output或result字段')
                 console.log('🔍 可用字段:', Object.keys(data))
+                aiResponse = '抱歉，服务器返回了无效的响应格式。😔'
               }
             } else {
               console.log('❌ data不是有效对象')
+              aiResponse = '抱歉，服务器返回了无效的数据格式。😔'
             }
             
             console.log('🎯 解析完成，最终AI响应:', aiResponse)
