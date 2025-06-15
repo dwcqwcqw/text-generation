@@ -298,33 +298,86 @@ export default function ChatPage() {
           
           if (response.ok) {
             const data = await response.json()
-            console.log('📦 RunPod完整响应:', data)
+            console.log('📦 RunPod完整响应:', JSON.stringify(data, null, 2))
             
             let aiResponse = ''
             
-            // 更强健的响应处理逻辑
+            // 详细的响应解析逻辑，添加步骤式调试
+            console.log('🔍 开始解析响应...')
+            console.log('🔍 data类型:', typeof data)
+            console.log('🔍 data内容:', data)
+            
             if (data && typeof data === 'object') {
+              console.log('✅ data是有效对象')
+              
+              // 检查status
+              console.log('🔍 status:', data.status)
+              
+              // 检查output字段
+              console.log('🔍 output存在:', 'output' in data)
+              console.log('🔍 output类型:', typeof data.output)
+              console.log('🔍 output内容:', data.output)
+              
               if (data.status === "COMPLETED" && data.output) {
-                // 处理RunPod标准格式
+                console.log('✅ 状态为COMPLETED且有output')
+                
                 if (typeof data.output === 'string') {
+                  console.log('✅ output是字符串类型')
                   aiResponse = data.output.trim()
+                  console.log('✅ 提取的字符串响应:', aiResponse)
                 } else if (data.output && typeof data.output === 'object') {
-                  // 处理嵌套的output对象
-                  aiResponse = data.output.text || data.output.response || data.output.generated_text || 
-                              JSON.stringify(data.output)
+                  console.log('⚠️ output是对象类型，尝试解析...')
+                  console.log('🔍 output对象内容:', JSON.stringify(data.output, null, 2))
+                  
+                  // 尝试多种可能的字段名
+                  const possibleFields = ['text', 'response', 'generated_text', 'content', 'message']
+                  for (const field of possibleFields) {
+                    if (data.output[field] && typeof data.output[field] === 'string') {
+                      aiResponse = data.output[field].trim()
+                      console.log(`✅ 从output.${field}提取响应:`, aiResponse)
+                      break
+                    }
+                  }
+                  
+                  // 如果还是没找到，尝试序列化整个对象
+                  if (!aiResponse) {
+                    console.log('⚠️ 未找到有效字段，序列化整个output对象')
+                    aiResponse = JSON.stringify(data.output)
+                  }
+                } else {
+                  console.log('⚠️ output既不是字符串也不是对象')
+                  aiResponse = String(data.output)
                 }
               } else if (data.output) {
-                // 直接使用output字段
-                aiResponse = typeof data.output === 'string' ? data.output.trim() : String(data.output)
+                console.log('⚠️ 状态不是COMPLETED但有output，直接使用')
+                if (typeof data.output === 'string') {
+                  aiResponse = data.output.trim()
+                } else {
+                  aiResponse = String(data.output)
+                }
+                console.log('📤 直接使用output:', aiResponse)
               } else if (data.result) {
-                // 有些API使用result字段
+                console.log('⚠️ 没有output，尝试使用result字段')
                 aiResponse = typeof data.result === 'string' ? data.result.trim() : String(data.result)
+                console.log('📤 使用result:', aiResponse)
+              } else {
+                console.log('❌ 没有找到output或result字段')
+                console.log('🔍 可用字段:', Object.keys(data))
               }
+            } else {
+              console.log('❌ data不是有效对象')
             }
             
+            console.log('🎯 解析完成，最终AI响应:', aiResponse)
+            console.log('🎯 AI响应类型:', typeof aiResponse)
+            console.log('🎯 AI响应长度:', aiResponse.length)
+            
             // 最后的安全检查
-            if (!aiResponse || aiResponse === '[object Object]' || aiResponse === 'undefined') {
+            if (!aiResponse || aiResponse === '[object Object]' || aiResponse === 'undefined' || aiResponse === 'null') {
+              console.log('❌ AI响应无效，使用默认消息')
               aiResponse = '抱歉，我无法生成回复，请重试。😔'
+            } else {
+              console.log('✅ AI响应有效，长度:', aiResponse.length)
             }
             
             console.log('🎯 最终提取的AI响应:', aiResponse)
