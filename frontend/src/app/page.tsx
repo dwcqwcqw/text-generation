@@ -325,27 +325,33 @@ export default function ChatPage() {
               if (data.output !== null && data.output !== undefined) {
                 console.log('✅ 发现output字段，开始处理')
                 
-                // 直接将output转换为字符串，无论它是什么类型
-                aiResponse = String(data.output).trim()
-                console.log('✅ 转换后的响应:', aiResponse)
-                
-                // 如果转换后是[object Object]，尝试JSON解析
-                if (aiResponse === '[object Object]') {
-                  console.log('⚠️ 检测到[object Object]，尝试JSON解析')
-                  if (typeof data.output === 'object') {
-                    // 尝试从对象中提取文本
-                    if (data.output.text) {
-                      aiResponse = String(data.output.text).trim()
-                    } else if (data.output.response) {
-                      aiResponse = String(data.output.response).trim()
-                    } else if (data.output.content) {
-                      aiResponse = String(data.output.content).trim()
-                    } else {
-                      // 如果没有找到合适的字段，使用JSON字符串
-                      aiResponse = JSON.stringify(data.output)
-                    }
-                    console.log('✅ 从对象提取的响应:', aiResponse)
+                // 检查output是否为对象类型，如果是则尝试提取其中的文本内容
+                if (typeof data.output === 'object' && data.output !== null) {
+                  console.log('🔍 output是对象类型，尝试提取内容')
+                  
+                  // 尝试从对象中提取文本内容
+                  if ('model_info' in data.output && 'output' in data.output) {
+                    // 处理特定格式的响应 {model_info: {...}, output: "文本内容", status: "success"}
+                    aiResponse = String(data.output.output).trim()
+                    console.log('✅ 从model_info/output格式提取的响应:', aiResponse)
+                  } else if (data.output.text) {
+                    aiResponse = String(data.output.text).trim()
+                    console.log('✅ 从text字段提取的响应:', aiResponse)
+                  } else if (data.output.response) {
+                    aiResponse = String(data.output.response).trim()
+                    console.log('✅ 从response字段提取的响应:', aiResponse)
+                  } else if (data.output.content) {
+                    aiResponse = String(data.output.content).trim()
+                    console.log('✅ 从content字段提取的响应:', aiResponse)
+                  } else {
+                    // 如果没有找到合适的字段，使用JSON字符串
+                    aiResponse = JSON.stringify(data.output)
+                    console.log('⚠️ 未找到标准字段，使用JSON字符串:', aiResponse)
                   }
+                } else {
+                  // output不是对象，直接使用
+                  aiResponse = String(data.output).trim()
+                  console.log('✅ 直接使用非对象output:', aiResponse)
                 }
               } else if (data.result) {
                 console.log('⚠️ 没有output，尝试使用result字段')
