@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
-  trailingSlash: true,
-  skipTrailingSlashRedirect: true,
+  trailingSlash: false,
+  skipTrailingSlashRedirect: false,
   distDir: 'out',
   images: {
     unoptimized: true
@@ -12,9 +12,6 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://api-text-generation.runpod.app',
     NEXT_PUBLIC_R2_BUCKET: process.env.NEXT_PUBLIC_R2_BUCKET || 'text-generation'
-  },
-  generateBuildId: async () => {
-    return 'build-' + Date.now()
   },
   experimental: {
     esmExternals: false

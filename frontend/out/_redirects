@@ -1,5 +1,2 @@
 # Cloudflare Pages - Next.js static export
-# Let static assets be served directly, no redirects for them
-
-# Only handle 404 for non-existent HTML pages
-/404.html /404 200
+# No redirects - let Cloudflare serve files directly

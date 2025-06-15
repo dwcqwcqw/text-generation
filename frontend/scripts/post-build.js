@@ -5,23 +5,20 @@ console.log('🔧 Running post-build script...');
 
 const outDir = path.join(__dirname, '..', 'out');
 
-// Fix _redirects file for Cloudflare Pages
+// Create minimal _redirects file - let Cloudflare handle everything automatically
 const redirectsPath = path.join(outDir, '_redirects');
 const redirectsContent = `# Cloudflare Pages - Next.js static export
-# Let static assets be served directly, no redirects for them
-
-# Only handle 404 for non-existent HTML pages
-/404.html /404 200
+# No redirects - let Cloudflare serve files directly
 `;
 
 fs.writeFileSync(redirectsPath, redirectsContent, 'utf8');
-console.log('✅ Fixed _redirects file for Cloudflare Pages');
+console.log('✅ Created minimal _redirects file');
 
-// Remove _headers file since Cloudflare should auto-detect MIME types
+// Ensure no _headers file exists
 const headersPath = path.join(outDir, '_headers');
 if (fs.existsSync(headersPath)) {
   fs.unlinkSync(headersPath);
-  console.log('✅ Removed _headers file - letting Cloudflare auto-detect MIME types');
+  console.log('✅ Removed _headers file');
 }
 
 console.log('🎉 Post-build script completed successfully!'); 
