@@ -173,6 +173,31 @@ export default function ChatPage() {
   const generateResponse = async (userInput: string, history: Message[] = []) => {
     setIsLoading(true)
 
+    // 首先添加用户消息到当前会话
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content: userInput,
+      role: 'user',
+      timestamp: new Date()
+    }
+
+    // 更新会话，添加用户消息
+    let updatedSession = currentSession
+    if (currentSession) {
+      const updatedMessages = [...history, userMessage]
+      updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+      
+      setCurrentSession(updatedSession)
+      setChatSessions(prev => 
+        prev.map(s => s.id === currentSession.id ? updatedSession! : s)
+      )
+
+      // 如果是第一条消息，更新会话标题
+      if (history.length === 0) {
+        updateSessionTitle(currentSession, userInput)
+      }
+    }
+
     // RunPod API 配置 - 直接使用完整的API Key (强制部署更新)
     const RUNPOD_API_KEY = 'rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb'
     
@@ -255,28 +280,9 @@ export default function ChatPage() {
             model: selectedModel.id
           }
 
-          // 如果是新对话的第一条消息，生成标题
-          let updatedSession = currentSession
-          if (currentSession && history.length === 0) {
-            const newTitle = generateChatTitle(userInput)
-            updatedSession = { ...currentSession, title: newTitle }
-            setCurrentSession(updatedSession)
-            setChatSessions(prev => 
-              prev.map(s => s.id === currentSession.id ? { ...s, title: newTitle } : s)
-            )
-          }
-
-          // 添加用户消息到会话
-          const userMessage: Message = {
-            id: (Date.now() - 1).toString(),
-            content: userInput,
-            role: 'user',
-            timestamp: new Date()
-          }
-
-          // 添加到当前会话中
+          // 添加AI响应消息到当前会话
           if (updatedSession) {
-            const updatedMessages = [...(history.length > 0 ? history : updatedSession.messages), userMessage, streamingMessage]
+            const updatedMessages = [...updatedSession.messages, streamingMessage]
             updatedSession = { ...updatedSession, messages: updatedMessages, lastMessage: new Date() }
             
             setCurrentSession(updatedSession)
@@ -378,7 +384,7 @@ export default function ChatPage() {
               // 实现流式效果 - 逐字显示
               await simulateStreamingResponse(aiResponse, streamingMessage)
               setIsLoading(false)
-              return
+              return // 成功处理API响应，直接返回
             }
           } else {
             const errorText = await response.text()
@@ -436,27 +442,9 @@ export default function ChatPage() {
           model: selectedModel.id
         }
 
-        // 如果是新对话的第一条消息，生成标题
-        let updatedSession = currentSession
-        if (currentSession && history.length === 0) {
-          const newTitle = generateChatTitle(userInput)
-          updatedSession = { ...currentSession, title: newTitle }
-          setCurrentSession(updatedSession)
-          setChatSessions(prev => 
-            prev.map(s => s.id === currentSession.id ? { ...s, title: newTitle } : s)
-          )
-        }
-
-        // 添加用户消息
-        const userMessage: Message = {
-          id: (Date.now() - 1).toString(),
-          content: userInput,
-          role: 'user',
-          timestamp: new Date()
-        }
-
+        // 添加AI响应消息到当前会话
         if (updatedSession) {
-          const updatedMessages = [...(history.length > 0 ? history : updatedSession.messages), userMessage, streamingMessage]
+          const updatedMessages = [...updatedSession.messages, streamingMessage]
           updatedSession = { ...updatedSession, messages: updatedMessages, lastMessage: new Date() }
           
           setCurrentSession(updatedSession)
@@ -549,28 +537,11 @@ export default function ChatPage() {
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading || !currentSession) return
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: inputValue.trim(),
-      role: 'user',
-      timestamp: new Date()
-    }
-
-    const updatedMessages = [...currentSession.messages, userMessage]
-    const updatedSession = { ...currentSession, messages: updatedMessages }
-    
-    setCurrentSession(updatedSession)
-    setChatSessions(prev => 
-      prev.map(s => s.id === currentSession.id ? updatedSession : s)
-    )
-
-    // 如果是第一条消息，更新会话标题
-    if (currentSession.messages.length === 0) {
-      updateSessionTitle(currentSession, userMessage.content)
-    }
-
+    const userInput = inputValue.trim()
     setInputValue('')
-    await generateResponse(userMessage.content, updatedMessages)
+    
+    // 直接调用generateResponse，让它处理消息添加
+    await generateResponse(userInput, currentSession.messages)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
