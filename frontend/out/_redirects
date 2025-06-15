@@ -1,6 +1,5 @@
-# Static assets should be served directly
-/_next/static/*  /_next/static/:splat  200
-/static/*        /static/:splat        200
+# Cloudflare Pages - Next.js static export
+# Let static assets be served directly, no redirects for them
 
-# SPA Fallback for Next.js static export - only for HTML routes
-/*    /index.html   200
+# Only handle 404 for non-existent HTML pages
+/404.html /404 200

@@ -5,32 +5,23 @@ console.log('🔧 Running post-build script...');
 
 const outDir = path.join(__dirname, '..', 'out');
 
-// Fix _redirects file
+// Fix _redirects file for Cloudflare Pages
 const redirectsPath = path.join(outDir, '_redirects');
-const redirectsContent = `# Static assets should be served directly
-/_next/static/*  /_next/static/:splat  200
-/static/*        /static/:splat        200
+const redirectsContent = `# Cloudflare Pages - Next.js static export
+# Let static assets be served directly, no redirects for them
 
-# SPA Fallback for Next.js static export - only for HTML routes
-/*    /index.html   200
+# Only handle 404 for non-existent HTML pages
+/404.html /404 200
 `;
 
 fs.writeFileSync(redirectsPath, redirectsContent, 'utf8');
-console.log('✅ Fixed _redirects file');
+console.log('✅ Fixed _redirects file for Cloudflare Pages');
 
-// Create _headers file
+// Remove _headers file since Cloudflare should auto-detect MIME types
 const headersPath = path.join(outDir, '_headers');
-const headersContent = `/_next/static/css/*
-  Content-Type: text/css
+if (fs.existsSync(headersPath)) {
+  fs.unlinkSync(headersPath);
+  console.log('✅ Removed _headers file - letting Cloudflare auto-detect MIME types');
+}
 
-/_next/static/chunks/*.js
-  Content-Type: application/javascript
-
-/*
-  X-Content-Type-Options: nosniff
-`;
-
-fs.writeFileSync(headersPath, headersContent, 'utf8');
-console.log('✅ Created _headers file');
-
-console.log('🎉 Post-build script completed!'); 
+console.log('🎉 Post-build script completed successfully!'); 
