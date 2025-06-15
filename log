@@ -1,0 +1,598 @@
+2025-06-15T14:44:56.974819558Z ==========
+2025-06-15T14:44:56.974842813Z == CUDA ==
+2025-06-15T14:44:56.974976266Z ==========
+2025-06-15T14:44:56.979275282Z CUDA Version 12.1.1
+2025-06-15T14:44:56.980781771Z Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+2025-06-15T14:44:56.982195884Z This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+2025-06-15T14:44:56.982199961Z By pulling and using the container, you accept the terms and conditions of this license:
+2025-06-15T14:44:56.982203728Z https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+2025-06-15T14:44:56.982210702Z A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+2025-06-15T14:44:56.997042042Z 🚀 启动GPU优化的AI文本生成服务
+2025-06-15T14:44:56.997051109Z 📊 系统信息:
+2025-06-15T14:44:56.998660503Z   - 容器架构: x86_64
+2025-06-15T14:44:57.001554394Z   - Python版本: Python 3.10.12
+2025-06-15T14:44:57.001710530Z 📊 GPU信息:
+2025-06-15T14:44:57.039910670Z name, memory.total [MiB], compute_cap
+2025-06-15T14:44:57.039945155Z NVIDIA L4, 23034 MiB, 8.9
+2025-06-15T14:44:57.044867645Z 📊 环境变量:
+2025-06-15T14:44:57.044876422Z   - GGML_CUDA: 1
+2025-06-15T14:44:57.044878576Z   - CUDA_VISIBLE_DEVICES: 0
+2025-06-15T14:44:57.044901199Z   - CMAKE_CUDA_ARCHITECTURES: 75;80;86;89
+2025-06-15T14:44:57.044912881Z   - ARCHFLAGS: -arch x86_64
+2025-06-15T14:44:57.044916979Z 🔍 验证llama-cpp-python安装...
+2025-06-15T14:44:57.165444354Z ✅ llama-cpp-python 0.3.4 已安装
+2025-06-15T14:44:57.176594309Z 🔧 运行最终GPU修复...
+2025-06-15T14:44:57.213527916Z 2025-06-15 14:44:57,213 - INFO - 🚀 开始最终GPU修复...
+2025-06-15T14:44:57.213556931Z 2025-06-15 14:44:57,213 - INFO - 🔍 系统架构: x86_64
+2025-06-15T14:44:57.213560528Z 2025-06-15 14:44:57,213 - INFO - ✅ 正确的x86_64架构
+2025-06-15T14:44:57.213567271Z 2025-06-15 14:44:57,213 - INFO - 🔧 设置CUDA环境变量...
+2025-06-15T14:44:57.213570337Z 2025-06-15 14:44:57,213 - INFO -   ✓ CUDA_VISIBLE_DEVICES=0
+2025-06-15T14:44:57.213582860Z 2025-06-15 14:44:57,213 - INFO -   ✓ GGML_CUDA=1
+2025-06-15T14:44:57.213586257Z 2025-06-15 14:44:57,213 - INFO -   ✓ CMAKE_CUDA_ARCHITECTURES=75;80;86;89
+2025-06-15T14:44:57.213623968Z 2025-06-15 14:44:57,213 - INFO -   ✓ FORCE_CMAKE=1
+2025-06-15T14:44:57.213634829Z 2025-06-15 14:44:57,213 - INFO -   ✓ CMAKE_ARGS=-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89
+2025-06-15T14:44:57.213663784Z 2025-06-15 14:44:57,213 - INFO -   ✓ ARCHFLAGS=-arch x86_64
+2025-06-15T14:44:57.213672941Z 2025-06-15 14:44:57,213 - INFO -   ✓ CFLAGS=-march=x86-64
+2025-06-15T14:44:57.213692599Z 2025-06-15 14:44:57,213 - INFO -   ✓ CXXFLAGS=-march=x86-64
+2025-06-15T14:44:57.528295706Z 2025-06-15 14:44:57,528 - INFO - ✅ NVIDIA驱动正常
+2025-06-15T14:44:57.528318760Z 2025-06-15 14:44:57,528 - INFO - 🎯 检测到GPU: |   0  NVIDIA L4                      On  |   00000000:02:00.0 Off |                    0 |
+2025-06-15T14:44:57.528350320Z 2025-06-15 14:44:57,528 - INFO - 🔍 检查llama-cpp-python GPU版本...
+2025-06-15T14:44:57.705006843Z 2025-06-15 14:44:57,704 - INFO - ✅ llama-cpp-python已安装
+2025-06-15T14:44:57.705022072Z 2025-06-15 14:44:57,704 - INFO - 📦 版本: 0.3.4
+2025-06-15T14:44:57.705050185Z 2025-06-15 14:44:57,704 - INFO - 🧪 测试CUDA支持...
+2025-06-15T14:44:57.705064823Z 2025-06-15 14:44:57,705 - INFO - ✅ GPU版本验证通过，跳过重新安装
+2025-06-15T14:44:57.705076896Z 2025-06-15 14:44:57,705 - INFO - 🧪 测试GPU加载...
+2025-06-15T14:44:57.705110870Z 2025-06-15 14:44:57,705 - INFO - ✅ llama-cpp-python导入成功
+2025-06-15T14:44:57.705135387Z 2025-06-15 14:44:57,705 - INFO - 🔧 验证GPU配置...
+2025-06-15T14:44:57.705171706Z 2025-06-15 14:44:57,705 - INFO -    GGML_CUDA: 1
+2025-06-15T14:44:57.705206261Z 2025-06-15 14:44:57,705 - INFO -    CUDA_VISIBLE_DEVICES: 0
+2025-06-15T14:44:59.156636259Z 2025-06-15 14:44:59,156 - INFO - 🎯 发现 2 个模型文件
+2025-06-15T14:44:59.157374590Z 2025-06-15 14:44:59,157 - INFO -    - L3.2-8X4B.gguf (13.9GB)
+2025-06-15T14:44:59.157765812Z 2025-06-15 14:44:59,157 - INFO -    - L3.2-8X3B.gguf (12.3GB)
+2025-06-15T14:44:59.157784788Z 2025-06-15 14:44:59,157 - INFO - ✅ GPU环境验证完成
+2025-06-15T14:44:59.157797733Z 2025-06-15 14:44:59,157 - INFO - 💡 实际模型加载将在首次请求时进行
+2025-06-15T14:44:59.157823902Z 2025-06-15 14:44:59,157 - INFO - 🎉 最终GPU修复完成！
+2025-06-15T14:44:59.157861894Z 2025-06-15 14:44:59,157 - INFO - 📋 修复摘要:
+2025-06-15T14:44:59.157878596Z 2025-06-15 14:44:59,157 - INFO -   ✓ 强制x86_64架构环境变量
+2025-06-15T14:44:59.157887453Z 2025-06-15 14:44:59,157 - INFO -   ✓ CUDA环境变量配置
+2025-06-15T14:44:59.157921548Z 2025-06-15 14:44:59,157 - INFO -   ✓ NVIDIA驱动检查
+2025-06-15T14:44:59.157927449Z 2025-06-15 14:44:59,157 - INFO -   ✓ GPU版本llama-cpp-python安装
+2025-06-15T14:44:59.157968617Z 2025-06-15 14:44:59,157 - INFO -   ✓ GPU加载测试
+2025-06-15T14:44:59.157977634Z 2025-06-15 14:44:59,157 - INFO -
+2025-06-15T14:44:59.158006409Z 2025-06-15 14:44:59,157 - INFO - 🔥 现在所有模型层都应该加载到GPU而不是CPU！
+2025-06-15T14:44:59.188136266Z 🚀 启动Handler
+2025-06-15T14:45:01.246327563Z handler_llama_ai.py :431  2025-06-15 14:45:01,246 🚀 启动GPU优化RunPod handler...
+2025-06-15T14:45:01.419507018Z handler_llama_ai.py :61   2025-06-15 14:45:01,419 🔥 GPU状态: 利用率0%, 显存0.0/22.5GB, 温度33.0°C
+2025-06-15T14:45:01.419758585Z --- Starting Serverless Worker |  Version 1.7.11 ---
+2025-06-15T14:45:01.917764476Z {"requestId": null, "message": "Jobs in queue: 1", "level": "INFO"}
+2025-06-15T14:45:01.917853936Z {"requestId": null, "message": "Jobs in progress: 1", "level": "INFO"}
+2025-06-15T14:45:01.920391320Z {"requestId": "sync-2407412e-6dac-49c6-80a7-8f37cd0a5bbf-u2", "message": "Started.", "level": "INFO"}
+2025-06-15T14:45:01.920599315Z handler_llama_ai.py :359  2025-06-15 14:45:01,920 🎯 Handler调用
+2025-06-15T14:45:01.920734652Z handler_llama_ai.py :360  2025-06-15 14:45:01,920 📥 完整事件: {
+2025-06-15T14:45:01.920746915Z   "delayTime": 14862,
+2025-06-15T14:45:01.920750963Z   "id": "sync-2407412e-6dac-49c6-80a7-8f37cd0a5bbf-u2",
+2025-06-15T14:45:01.920754890Z   "input": {
+2025-06-15T14:45:01.920758567Z     "history": [
+2025-06-15T14:45:01.920761673Z       {
+2025-06-15T14:45:01.920764709Z         "content": "hey",
+2025-06-15T14:45:01.920768316Z         "role": "user"
+2025-06-15T14:45:01.920771672Z       }
+2025-06-15T14:45:01.920775088Z     ],
+2025-06-15T14:45:01.920778084Z     "max_tokens": 1000,
+2025-06-15T14:45:01.920781150Z     "model_path": "/runpod-volume/text_models/L3.2-8X3B.gguf",
+2025-06-15T14:45:01.920784136Z     "prompt": "hey",
+2025-06-15T14:45:01.920787392Z     "system_template": "default",
+2025-06-15T14:45:01.920790828Z     "temperature": 0.7
+2025-06-15T14:45:01.920793894Z   },
+2025-06-15T14:45:01.920796930Z   "status": "IN_QUEUE"
+2025-06-15T14:45:01.920800256Z }
+2025-06-15T14:45:01.920803302Z handler_llama_ai.py :370  2025-06-15 14:45:01,920 📝 提取的提示词: 'hey'
+2025-06-15T14:45:01.920806408Z handler_llama_ai.py :371  2025-06-15 14:45:01,920 👤 人格设置: 'default'
+2025-06-15T14:45:01.920815906Z handler_llama_ai.py :372  2025-06-15 14:45:01,920 🎯 请求的模型: '/runpod-volume/text_models/L3.2-8X3B.gguf'
+2025-06-15T14:45:01.920819783Z handler_llama_ai.py :373  2025-06-15 14:45:01,920 🌊 流式响应: False
+2025-06-15T14:45:01.920822979Z handler_llama_ai.py :387  2025-06-15 14:45:01,920 🔄 需要切换模型: None -> /runpod-volume/text_models/L3.2-8X3B.gguf
+2025-06-15T14:45:01.920827859Z handler_llama_ai.py :393  2025-06-15 14:45:01,920 🔄 模型未初始化，开始初始化...
+2025-06-15T14:45:01.920856142Z handler_llama_ai.py :177  2025-06-15 14:45:01,920 🔄 开始模型初始化...
+2025-06-15T14:45:01.922888418Z handler_llama_ai.py :94   2025-06-15 14:45:01,922 📁 发现模型: /runpod-volume/text_models/L3.2-8X4B.gguf (13.9GB)
+2025-06-15T14:45:01.923299198Z handler_llama_ai.py :94   2025-06-15 14:45:01,923 📁 发现模型: /runpod-volume/text_models/L3.2-8X3B.gguf (12.3GB)
+2025-06-15T14:45:01.923763118Z handler_llama_ai.py :194  2025-06-15 14:45:01,923 🎯 使用指定的模型: /runpod-volume/text_models/L3.2-8X3B.gguf
+2025-06-15T14:45:01.924138410Z handler_llama_ai.py :204  2025-06-15 14:45:01,924 📏 指定模型大小: 12.3GB
+2025-06-15T14:45:01.924143500Z handler_llama_ai.py :205  2025-06-15 14:45:01,924 ✅ 确认使用指定模型: L3.2-8X3B.gguf
+2025-06-15T14:45:01.924153038Z handler_llama_ai.py :103  2025-06-15 14:45:01,924 llama-cpp-python版本: 未知
+2025-06-15T14:45:01.924185389Z handler_llama_ai.py :104  2025-06-15 14:45:01,924 📂 强制GPU模式加载: /runpod-volume/text_models/L3.2-8X3B.gguf
+2025-06-15T14:45:01.951108071Z handler_llama_ai.py :61   2025-06-15 14:45:01,950 🔥 GPU状态: 利用率0%, 显存0.0/22.5GB, 温度33.0°C
+2025-06-15T14:45:01.951147286Z handler_llama_ai.py :110  2025-06-15 14:45:01,951 🎯 强制所有层到GPU (n_gpu_layers=-1)
+2025-06-15T14:45:01.951188544Z handler_llama_ai.py :123  2025-06-15 14:45:01,951 🔧 GPU配置: n_gpu_layers=-1 (全部), n_ctx=16384, n_batch=512
+2025-06-15T14:45:02.077611205Z ggml_cuda_init: GGML_CUDA_FORCE_MMQ:    yes
+2025-06-15T14:45:02.077629930Z ggml_cuda_init: GGML_CUDA_FORCE_CUBLAS: no
+2025-06-15T14:45:02.077633647Z ggml_cuda_init: found 1 CUDA devices:
+2025-06-15T14:45:02.079779128Z   Device 0: NVIDIA L4, compute capability 8.9, VMM: yes
+2025-06-15T14:45:02.211702205Z llama_load_model_from_file: using device CUDA0 (NVIDIA L4) - 22397 MiB free
+2025-06-15T14:45:02.251653657Z llama_model_loader: loaded meta data with 31 key-value pairs and 284 tensors from /runpod-volume/text_models/L3.2-8X3B.gguf (version GGUF V3 (latest))
+2025-06-15T14:45:02.251670459Z llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+2025-06-15T14:45:02.251674517Z llama_model_loader: - kv   0:                       general.architecture str              = llama
+2025-06-15T14:45:02.251678053Z llama_model_loader: - kv   1:                               general.type str              = model
+2025-06-15T14:45:02.251681269Z llama_model_loader: - kv   2:                               general.name str              = L3.2 MOE 8X3 Series2
+2025-06-15T14:45:02.251684466Z llama_model_loader: - kv   3:                           general.finetune str              = 8X3-series2
+2025-06-15T14:45:02.251687591Z llama_model_loader: - kv   4:                           general.basename str              = L3.2-MOE
+2025-06-15T14:45:02.251690767Z llama_model_loader: - kv   5:                         general.size_label str              = 8x3.6B
+2025-06-15T14:45:02.251693813Z llama_model_loader: - kv   6:                          llama.block_count u32              = 28
+2025-06-15T14:45:02.251697841Z llama_model_loader: - kv   7:                       llama.context_length u32              = 131072
+2025-06-15T14:45:02.251701197Z llama_model_loader: - kv   8:                     llama.embedding_length u32              = 3072
+2025-06-15T14:45:02.251704524Z llama_model_loader: - kv   9:                  llama.feed_forward_length u32              = 8192
+2025-06-15T14:45:02.251707619Z llama_model_loader: - kv  10:                 llama.attention.head_count u32              = 24
+2025-06-15T14:45:02.251710785Z llama_model_loader: - kv  11:              llama.attention.head_count_kv u32              = 8
+2025-06-15T14:45:02.251721155Z llama_model_loader: - kv  12:                       llama.rope.freq_base f32              = 500000.000000
+2025-06-15T14:45:02.251724672Z llama_model_loader: - kv  13:     llama.attention.layer_norm_rms_epsilon f32              = 0.000010
+2025-06-15T14:45:02.251727778Z llama_model_loader: - kv  14:                         llama.expert_count u32              = 8
+2025-06-15T14:45:02.251730924Z llama_model_loader: - kv  15:                    llama.expert_used_count u32              = 2
+2025-06-15T14:45:02.251733969Z llama_model_loader: - kv  16:                 llama.attention.key_length u32              = 128
+2025-06-15T14:45:02.251737346Z llama_model_loader: - kv  17:               llama.attention.value_length u32              = 128
+2025-06-15T14:45:02.251740382Z llama_model_loader: - kv  18:                          general.file_type u32              = 17
+2025-06-15T14:45:02.251743437Z llama_model_loader: - kv  19:                           llama.vocab_size u32              = 128256
+2025-06-15T14:45:02.251755380Z llama_model_loader: - kv  20:                 llama.rope.dimension_count u32              = 128
+2025-06-15T14:45:02.251758666Z llama_model_loader: - kv  21:                       tokenizer.ggml.model str              = gpt2
+2025-06-15T14:45:02.251761812Z llama_model_loader: - kv  22:                         tokenizer.ggml.pre str              = llama-bpe
+2025-06-15T14:45:02.273448931Z llama_model_loader: - kv  23:                      tokenizer.ggml.tokens arr[str,128256]  = ["!", "\"", "#", "$", "%", "&", "'", ...
+2025-06-15T14:45:02.279560847Z llama_model_loader: - kv  24:                  tokenizer.ggml.token_type arr[i32,128256]  = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ...
+2025-06-15T14:45:02.326402263Z llama_model_loader: - kv  25:                      tokenizer.ggml.merges arr[str,280147]  = ["Ġ Ġ", "Ġ ĠĠĠ", "ĠĠ ĠĠ", "...
+2025-06-15T14:45:02.326419767Z llama_model_loader: - kv  26:                tokenizer.ggml.bos_token_id u32              = 128000
+2025-06-15T14:45:02.326423744Z llama_model_loader: - kv  27:                tokenizer.ggml.eos_token_id u32              = 128009
+2025-06-15T14:45:02.326426830Z llama_model_loader: - kv  28:            tokenizer.ggml.padding_token_id u32              = 128000
+2025-06-15T14:45:02.326429916Z llama_model_loader: - kv  29:                    tokenizer.chat_template str              = {{- bos_token }}\n{%- if custom_tools ...
+2025-06-15T14:45:02.326433072Z llama_model_loader: - kv  30:               general.quantization_version u32              = 2
+2025-06-15T14:45:02.326436809Z llama_model_loader: - type  f32:   86 tensors
+2025-06-15T14:45:02.326439885Z llama_model_loader: - type q8_0:   56 tensors
+2025-06-15T14:45:02.326442860Z llama_model_loader: - type q5_K:  127 tensors
+2025-06-15T14:45:02.326445686Z llama_model_loader: - type q6_K:   15 tensors
+2025-06-15T14:45:02.583915200Z llm_load_vocab: control token: 128254 '<|reserved_special_token_246|>' is not marked as EOG
+2025-06-15T14:45:02.583938474Z llm_load_vocab: control token: 128249 '<|reserved_special_token_241|>' is not marked as EOG
+2025-06-15T14:45:02.583942332Z llm_load_vocab: control token: 128246 '<|reserved_special_token_238|>' is not marked as EOG
+2025-06-15T14:45:02.583945748Z llm_load_vocab: control token: 128243 '<|reserved_special_token_235|>' is not marked as EOG
+2025-06-15T14:45:02.583952451Z llm_load_vocab: control token: 128242 '<|reserved_special_token_234|>' is not marked as EOG
+2025-06-15T14:45:02.583955396Z llm_load_vocab: control token: 128241 '<|reserved_special_token_233|>' is not marked as EOG
+2025-06-15T14:45:02.583958362Z llm_load_vocab: control token: 128240 '<|reserved_special_token_232|>' is not marked as EOG
+2025-06-15T14:45:02.583961328Z llm_load_vocab: control token: 128235 '<|reserved_special_token_227|>' is not marked as EOG
+2025-06-15T14:45:02.583964213Z llm_load_vocab: control token: 128231 '<|reserved_special_token_223|>' is not marked as EOG
+2025-06-15T14:45:02.583967048Z llm_load_vocab: control token: 128230 '<|reserved_special_token_222|>' is not marked as EOG
+2025-06-15T14:45:02.583970184Z llm_load_vocab: control token: 128228 '<|reserved_special_token_220|>' is not marked as EOG
+2025-06-15T14:45:02.583973020Z llm_load_vocab: control token: 128225 '<|reserved_special_token_217|>' is not marked as EOG
+2025-06-15T14:45:02.583975845Z llm_load_vocab: control token: 128218 '<|reserved_special_token_210|>' is not marked as EOG
+2025-06-15T14:45:02.583978660Z llm_load_vocab: control token: 128214 '<|reserved_special_token_206|>' is not marked as EOG
+2025-06-15T14:45:02.583981486Z llm_load_vocab: control token: 128213 '<|reserved_special_token_205|>' is not marked as EOG
+2025-06-15T14:45:02.583984301Z llm_load_vocab: control token: 128207 '<|reserved_special_token_199|>' is not marked as EOG
+2025-06-15T14:45:02.583987127Z llm_load_vocab: control token: 128206 '<|reserved_special_token_198|>' is not marked as EOG
+2025-06-15T14:45:02.583989952Z llm_load_vocab: control token: 128204 '<|reserved_special_token_196|>' is not marked as EOG
+2025-06-15T14:45:02.583992827Z llm_load_vocab: control token: 128200 '<|reserved_special_token_192|>' is not marked as EOG
+2025-06-15T14:45:02.584008046Z llm_load_vocab: control token: 128199 '<|reserved_special_token_191|>' is not marked as EOG
+2025-06-15T14:45:02.584011212Z llm_load_vocab: control token: 128198 '<|reserved_special_token_190|>' is not marked as EOG
+2025-06-15T14:45:02.584014028Z llm_load_vocab: control token: 128196 '<|reserved_special_token_188|>' is not marked as EOG
+2025-06-15T14:45:02.584019598Z llm_load_vocab: control token: 128194 '<|reserved_special_token_186|>' is not marked as EOG
+2025-06-15T14:45:02.584022814Z llm_load_vocab: control token: 128193 '<|reserved_special_token_185|>' is not marked as EOG
+2025-06-15T14:45:02.584025790Z llm_load_vocab: control token: 128188 '<|reserved_special_token_180|>' is not marked as EOG
+2025-06-15T14:45:02.584028605Z llm_load_vocab: control token: 128187 '<|reserved_special_token_179|>' is not marked as EOG
+2025-06-15T14:45:02.584031781Z llm_load_vocab: control token: 128185 '<|reserved_special_token_177|>' is not marked as EOG
+2025-06-15T14:45:02.584034647Z llm_load_vocab: control token: 128184 '<|reserved_special_token_176|>' is not marked as EOG
+2025-06-15T14:45:02.584037552Z llm_load_vocab: control token: 128180 '<|reserved_special_token_172|>' is not marked as EOG
+2025-06-15T14:45:02.584040498Z llm_load_vocab: control token: 128179 '<|reserved_special_token_171|>' is not marked as EOG
+2025-06-15T14:45:02.584043293Z llm_load_vocab: control token: 128178 '<|reserved_special_token_170|>' is not marked as EOG
+2025-06-15T14:45:02.584046329Z llm_load_vocab: control token: 128177 '<|reserved_special_token_169|>' is not marked as EOG
+2025-06-15T14:45:02.584049274Z llm_load_vocab: control token: 128176 '<|reserved_special_token_168|>' is not marked as EOG
+2025-06-15T14:45:02.584052220Z llm_load_vocab: control token: 128175 '<|reserved_special_token_167|>' is not marked as EOG
+2025-06-15T14:45:02.584055296Z llm_load_vocab: control token: 128171 '<|reserved_special_token_163|>' is not marked as EOG
+2025-06-15T14:45:02.584058221Z llm_load_vocab: control token: 128170 '<|reserved_special_token_162|>' is not marked as EOG
+2025-06-15T14:45:02.584061107Z llm_load_vocab: control token: 128169 '<|reserved_special_token_161|>' is not marked as EOG
+2025-06-15T14:45:02.584064163Z llm_load_vocab: control token: 128168 '<|reserved_special_token_160|>' is not marked as EOG
+2025-06-15T14:45:02.584067178Z llm_load_vocab: control token: 128165 '<|reserved_special_token_157|>' is not marked as EOG
+2025-06-15T14:45:02.584070395Z llm_load_vocab: control token: 128162 '<|reserved_special_token_154|>' is not marked as EOG
+2025-06-15T14:45:02.584073200Z llm_load_vocab: control token: 128158 '<|reserved_special_token_150|>' is not marked as EOG
+2025-06-15T14:45:02.584076707Z llm_load_vocab: control token: 128156 '<|reserved_special_token_148|>' is not marked as EOG
+2025-06-15T14:45:02.584079722Z llm_load_vocab: control token: 128155 '<|reserved_special_token_147|>' is not marked as EOG
+2025-06-15T14:45:02.584084020Z llm_load_vocab: control token: 128154 '<|reserved_special_token_146|>' is not marked as EOG
+2025-06-15T14:45:02.584104549Z llm_load_vocab: control token: 128151 '<|reserved_special_token_143|>' is not marked as EOG
+2025-06-15T14:45:02.584107755Z llm_load_vocab: control token: 128149 '<|reserved_special_token_141|>' is not marked as EOG
+2025-06-15T14:45:02.584110631Z llm_load_vocab: control token: 128147 '<|reserved_special_token_139|>' is not marked as EOG
+2025-06-15T14:45:02.584113667Z llm_load_vocab: control token: 128146 '<|reserved_special_token_138|>' is not marked as EOG
+2025-06-15T14:45:02.584116682Z llm_load_vocab: control token: 128144 '<|reserved_special_token_136|>' is not marked as EOG
+2025-06-15T14:45:02.584120830Z llm_load_vocab: control token: 128142 '<|reserved_special_token_134|>' is not marked as EOG
+2025-06-15T14:45:02.584123926Z llm_load_vocab: control token: 128141 '<|reserved_special_token_133|>' is not marked as EOG
+2025-06-15T14:45:02.584127042Z llm_load_vocab: control token: 128138 '<|reserved_special_token_130|>' is not marked as EOG
+2025-06-15T14:45:02.584129978Z llm_load_vocab: control token: 128136 '<|reserved_special_token_128|>' is not marked as EOG
+2025-06-15T14:45:02.584136831Z llm_load_vocab: control token: 128135 '<|reserved_special_token_127|>' is not marked as EOG
+2025-06-15T14:45:02.584139906Z llm_load_vocab: control token: 128134 '<|reserved_special_token_126|>' is not marked as EOG
+2025-06-15T14:45:02.584142722Z llm_load_vocab: control token: 128133 '<|reserved_special_token_125|>' is not marked as EOG
+2025-06-15T14:45:02.584145577Z llm_load_vocab: control token: 128131 '<|reserved_special_token_123|>' is not marked as EOG
+2025-06-15T14:45:02.584148523Z llm_load_vocab: control token: 128128 '<|reserved_special_token_120|>' is not marked as EOG
+2025-06-15T14:45:02.584151328Z llm_load_vocab: control token: 128124 '<|reserved_special_token_116|>' is not marked as EOG
+2025-06-15T14:45:02.584154123Z llm_load_vocab: control token: 128123 '<|reserved_special_token_115|>' is not marked as EOG
+2025-06-15T14:45:02.584156919Z llm_load_vocab: control token: 128122 '<|reserved_special_token_114|>' is not marked as EOG
+2025-06-15T14:45:02.584159844Z llm_load_vocab: control token: 128119 '<|reserved_special_token_111|>' is not marked as EOG
+2025-06-15T14:45:02.584162700Z llm_load_vocab: control token: 128115 '<|reserved_special_token_107|>' is not marked as EOG
+2025-06-15T14:45:02.584165695Z llm_load_vocab: control token: 128112 '<|reserved_special_token_104|>' is not marked as EOG
+2025-06-15T14:45:02.584168491Z llm_load_vocab: control token: 128110 '<|reserved_special_token_102|>' is not marked as EOG
+2025-06-15T14:45:02.584172899Z llm_load_vocab: control token: 128109 '<|reserved_special_token_101|>' is not marked as EOG
+2025-06-15T14:45:02.584177748Z llm_load_vocab: control token: 128108 '<|reserved_special_token_100|>' is not marked as EOG
+2025-06-15T14:45:02.584180724Z llm_load_vocab: control token: 128106 '<|reserved_special_token_98|>' is not marked as EOG
+2025-06-15T14:45:02.584183529Z llm_load_vocab: control token: 128103 '<|reserved_special_token_95|>' is not marked as EOG
+2025-06-15T14:45:02.584186475Z llm_load_vocab: control token: 128102 '<|reserved_special_token_94|>' is not marked as EOG
+2025-06-15T14:45:02.584189751Z llm_load_vocab: control token: 128101 '<|reserved_special_token_93|>' is not marked as EOG
+2025-06-15T14:45:02.584192717Z llm_load_vocab: control token: 128097 '<|reserved_special_token_89|>' is not marked as EOG
+2025-06-15T14:45:02.584195522Z llm_load_vocab: control token: 128091 '<|reserved_special_token_83|>' is not marked as EOG
+2025-06-15T14:45:02.584198658Z llm_load_vocab: control token: 128090 '<|reserved_special_token_82|>' is not marked as EOG
+2025-06-15T14:45:02.584201884Z llm_load_vocab: control token: 128089 '<|reserved_special_token_81|>' is not marked as EOG
+2025-06-15T14:45:02.584205120Z llm_load_vocab: control token: 128087 '<|reserved_special_token_79|>' is not marked as EOG
+2025-06-15T14:45:02.584208136Z llm_load_vocab: control token: 128085 '<|reserved_special_token_77|>' is not marked as EOG
+2025-06-15T14:45:02.584210961Z llm_load_vocab: control token: 128081 '<|reserved_special_token_73|>' is not marked as EOG
+2025-06-15T14:45:02.584213857Z llm_load_vocab: control token: 128078 '<|reserved_special_token_70|>' is not marked as EOG
+2025-06-15T14:45:02.584217003Z llm_load_vocab: control token: 128076 '<|reserved_special_token_68|>' is not marked as EOG
+2025-06-15T14:45:02.584220149Z llm_load_vocab: control token: 128075 '<|reserved_special_token_67|>' is not marked as EOG
+2025-06-15T14:45:02.584223184Z llm_load_vocab: control token: 128073 '<|reserved_special_token_65|>' is not marked as EOG
+2025-06-15T14:45:02.584226170Z llm_load_vocab: control token: 128068 '<|reserved_special_token_60|>' is not marked as EOG
+2025-06-15T14:45:02.584229046Z llm_load_vocab: control token: 128067 '<|reserved_special_token_59|>' is not marked as EOG
+2025-06-15T14:45:02.584231841Z llm_load_vocab: control token: 128065 '<|reserved_special_token_57|>' is not marked as EOG
+2025-06-15T14:45:02.584234636Z llm_load_vocab: control token: 128063 '<|reserved_special_token_55|>' is not marked as EOG
+2025-06-15T14:45:02.584237431Z llm_load_vocab: control token: 128062 '<|reserved_special_token_54|>' is not marked as EOG
+2025-06-15T14:45:02.584240237Z llm_load_vocab: control token: 128060 '<|reserved_special_token_52|>' is not marked as EOG
+2025-06-15T14:45:02.584247240Z llm_load_vocab: control token: 128059 '<|reserved_special_token_51|>' is not marked as EOG
+2025-06-15T14:45:02.584251368Z llm_load_vocab: control token: 128057 '<|reserved_special_token_49|>' is not marked as EOG
+2025-06-15T14:45:02.584254223Z llm_load_vocab: control token: 128054 '<|reserved_special_token_46|>' is not marked as EOG
+2025-06-15T14:45:02.584257019Z llm_load_vocab: control token: 128046 '<|reserved_special_token_38|>' is not marked as EOG
+2025-06-15T14:45:02.584259934Z llm_load_vocab: control token: 128045 '<|reserved_special_token_37|>' is not marked as EOG
+2025-06-15T14:45:02.584262729Z llm_load_vocab: control token: 128044 '<|reserved_special_token_36|>' is not marked as EOG
+2025-06-15T14:45:02.584265625Z llm_load_vocab: control token: 128043 '<|reserved_special_token_35|>' is not marked as EOG
+2025-06-15T14:45:02.584268911Z llm_load_vocab: control token: 128038 '<|reserved_special_token_30|>' is not marked as EOG
+2025-06-15T14:45:02.584271696Z llm_load_vocab: control token: 128036 '<|reserved_special_token_28|>' is not marked as EOG
+2025-06-15T14:45:02.584274872Z llm_load_vocab: control token: 128035 '<|reserved_special_token_27|>' is not marked as EOG
+2025-06-15T14:45:02.584277718Z llm_load_vocab: control token: 128032 '<|reserved_special_token_24|>' is not marked as EOG
+2025-06-15T14:45:02.584280523Z llm_load_vocab: control token: 128028 '<|reserved_special_token_20|>' is not marked as EOG
+2025-06-15T14:45:02.584283379Z llm_load_vocab: control token: 128027 '<|reserved_special_token_19|>' is not marked as EOG
+2025-06-15T14:45:02.584286254Z llm_load_vocab: control token: 128024 '<|reserved_special_token_16|>' is not marked as EOG
+2025-06-15T14:45:02.584289140Z llm_load_vocab: control token: 128023 '<|reserved_special_token_15|>' is not marked as EOG
+2025-06-15T14:45:02.584292005Z llm_load_vocab: control token: 128022 '<|reserved_special_token_14|>' is not marked as EOG
+2025-06-15T14:45:02.584295061Z llm_load_vocab: control token: 128021 '<|reserved_special_token_13|>' is not marked as EOG
+2025-06-15T14:45:02.584298167Z llm_load_vocab: control token: 128018 '<|reserved_special_token_10|>' is not marked as EOG
+2025-06-15T14:45:02.584300962Z llm_load_vocab: control token: 128016 '<|reserved_special_token_8|>' is not marked as EOG
+2025-06-15T14:45:02.584303737Z llm_load_vocab: control token: 128015 '<|reserved_special_token_7|>' is not marked as EOG
+2025-06-15T14:45:02.584306633Z llm_load_vocab: control token: 128013 '<|reserved_special_token_5|>' is not marked as EOG
+2025-06-15T14:45:02.584309438Z llm_load_vocab: control token: 128011 '<|reserved_special_token_3|>' is not marked as EOG
+2025-06-15T14:45:02.584312243Z llm_load_vocab: control token: 128005 '<|reserved_special_token_2|>' is not marked as EOG
+2025-06-15T14:45:02.584316281Z llm_load_vocab: control token: 128004 '<|finetune_right_pad_id|>' is not marked as EOG
+2025-06-15T14:45:02.584319307Z llm_load_vocab: control token: 128002 '<|reserved_special_token_0|>' is not marked as EOG
+2025-06-15T14:45:02.584322543Z llm_load_vocab: control token: 128252 '<|reserved_special_token_244|>' is not marked as EOG
+2025-06-15T14:45:02.584325458Z llm_load_vocab: control token: 128190 '<|reserved_special_token_182|>' is not marked as EOG
+2025-06-15T14:45:02.584328474Z llm_load_vocab: control token: 128183 '<|reserved_special_token_175|>' is not marked as EOG
+2025-06-15T14:45:02.584333454Z llm_load_vocab: control token: 128137 '<|reserved_special_token_129|>' is not marked as EOG
+2025-06-15T14:45:02.584375403Z llm_load_vocab: control token: 128182 '<|reserved_special_token_174|>' is not marked as EOG
+2025-06-15T14:45:02.584488037Z llm_load_vocab: control token: 128040 '<|reserved_special_token_32|>' is not marked as EOG
+2025-06-15T14:45:02.584502995Z llm_load_vocab: control token: 128048 '<|reserved_special_token_40|>' is not marked as EOG
+2025-06-15T14:45:02.584506772Z llm_load_vocab: control token: 128092 '<|reserved_special_token_84|>' is not marked as EOG
+2025-06-15T14:45:02.584517843Z llm_load_vocab: control token: 128215 '<|reserved_special_token_207|>' is not marked as EOG
+2025-06-15T14:45:02.584545115Z llm_load_vocab: control token: 128107 '<|reserved_special_token_99|>' is not marked as EOG
+2025-06-15T14:45:02.584601492Z llm_load_vocab: control token: 128208 '<|reserved_special_token_200|>' is not marked as EOG
+2025-06-15T14:45:02.584685411Z llm_load_vocab: control token: 128145 '<|reserved_special_token_137|>' is not marked as EOG
+2025-06-15T14:45:02.584711551Z llm_load_vocab: control token: 128031 '<|reserved_special_token_23|>' is not marked as EOG
+2025-06-15T14:45:02.584718324Z llm_load_vocab: control token: 128129 '<|reserved_special_token_121|>' is not marked as EOG
+2025-06-15T14:45:02.584783718Z llm_load_vocab: control token: 128201 '<|reserved_special_token_193|>' is not marked as EOG
+2025-06-15T14:45:02.584859702Z llm_load_vocab: control token: 128074 '<|reserved_special_token_66|>' is not marked as EOG
+2025-06-15T14:45:02.584891412Z llm_load_vocab: control token: 128095 '<|reserved_special_token_87|>' is not marked as EOG
+2025-06-15T14:45:02.584936879Z llm_load_vocab: control token: 128186 '<|reserved_special_token_178|>' is not marked as EOG
+2025-06-15T14:45:02.585056335Z llm_load_vocab: control token: 128143 '<|reserved_special_token_135|>' is not marked as EOG
+2025-06-15T14:45:02.585062747Z llm_load_vocab: control token: 128229 '<|reserved_special_token_221|>' is not marked as EOG
+2025-06-15T14:45:02.585066514Z llm_load_vocab: control token: 128007 '<|end_header_id|>' is not marked as EOG
+2025-06-15T14:45:02.585070021Z llm_load_vocab: control token: 128055 '<|reserved_special_token_47|>' is not marked as EOG
+2025-06-15T14:45:02.585133882Z llm_load_vocab: control token: 128056 '<|reserved_special_token_48|>' is not marked as EOG
+2025-06-15T14:45:02.585264440Z llm_load_vocab: control token: 128061 '<|reserved_special_token_53|>' is not marked as EOG
+2025-06-15T14:45:02.585294637Z llm_load_vocab: control token: 128153 '<|reserved_special_token_145|>' is not marked as EOG
+2025-06-15T14:45:02.585361013Z llm_load_vocab: control token: 128152 '<|reserved_special_token_144|>' is not marked as EOG
+2025-06-15T14:45:02.585366243Z llm_load_vocab: control token: 128212 '<|reserved_special_token_204|>' is not marked as EOG
+2025-06-15T14:45:02.585370171Z llm_load_vocab: control token: 128172 '<|reserved_special_token_164|>' is not marked as EOG
+2025-06-15T14:45:02.585400719Z llm_load_vocab: control token: 128160 '<|reserved_special_token_152|>' is not marked as EOG
+2025-06-15T14:45:02.585521267Z llm_load_vocab: control token: 128041 '<|reserved_special_token_33|>' is not marked as EOG
+2025-06-15T14:45:02.585615306Z llm_load_vocab: control token: 128181 '<|reserved_special_token_173|>' is not marked as EOG
+2025-06-15T14:45:02.585702902Z llm_load_vocab: control token: 128094 '<|reserved_special_token_86|>' is not marked as EOG
+2025-06-15T14:45:02.585712971Z llm_load_vocab: control token: 128118 '<|reserved_special_token_110|>' is not marked as EOG
+2025-06-15T14:45:02.585939070Z llm_load_vocab: control token: 128236 '<|reserved_special_token_228|>' is not marked as EOG
+2025-06-15T14:45:02.585945192Z llm_load_vocab: control token: 128148 '<|reserved_special_token_140|>' is not marked as EOG
+2025-06-15T14:45:02.586197300Z llm_load_vocab: control token: 128042 '<|reserved_special_token_34|>' is not marked as EOG
+2025-06-15T14:45:02.586314643Z llm_load_vocab: control token: 128139 '<|reserved_special_token_131|>' is not marked as EOG
+2025-06-15T14:45:02.586515363Z llm_load_vocab: control token: 128173 '<|reserved_special_token_165|>' is not marked as EOG
+2025-06-15T14:45:02.586540872Z llm_load_vocab: control token: 128239 '<|reserved_special_token_231|>' is not marked as EOG
+2025-06-15T14:45:02.586558666Z llm_load_vocab: control token: 128157 '<|reserved_special_token_149|>' is not marked as EOG
+2025-06-15T14:45:02.586562683Z llm_load_vocab: control token: 128052 '<|reserved_special_token_44|>' is not marked as EOG
+2025-06-15T14:45:02.586584234Z llm_load_vocab: control token: 128026 '<|reserved_special_token_18|>' is not marked as EOG
+2025-06-15T14:45:02.586632005Z llm_load_vocab: control token: 128003 '<|reserved_special_token_1|>' is not marked as EOG
+2025-06-15T14:45:02.586734509Z llm_load_vocab: control token: 128019 '<|reserved_special_token_11|>' is not marked as EOG
+2025-06-15T14:45:02.586757763Z llm_load_vocab: control token: 128116 '<|reserved_special_token_108|>' is not marked as EOG
+2025-06-15T14:45:02.586863023Z llm_load_vocab: control token: 128161 '<|reserved_special_token_153|>' is not marked as EOG
+2025-06-15T14:45:02.586905804Z llm_load_vocab: control token: 128226 '<|reserved_special_token_218|>' is not marked as EOG
+2025-06-15T14:45:02.587083541Z llm_load_vocab: control token: 128159 '<|reserved_special_token_151|>' is not marked as EOG
+2025-06-15T14:45:02.587125531Z llm_load_vocab: control token: 128012 '<|reserved_special_token_4|>' is not marked as EOG
+2025-06-15T14:45:02.587358283Z llm_load_vocab: control token: 128088 '<|reserved_special_token_80|>' is not marked as EOG
+2025-06-15T14:45:02.587782978Z llm_load_vocab: control token: 128163 '<|reserved_special_token_155|>' is not marked as EOG
+2025-06-15T14:45:02.587850897Z llm_load_vocab: control token: 128001 '<|end_of_text|>' is not marked as EOG
+2025-06-15T14:45:02.587898979Z llm_load_vocab: control token: 128113 '<|reserved_special_token_105|>' is not marked as EOG
+2025-06-15T14:45:02.587953903Z llm_load_vocab: control token: 128250 '<|reserved_special_token_242|>' is not marked as EOG
+2025-06-15T14:45:02.588004839Z llm_load_vocab: control token: 128125 '<|reserved_special_token_117|>' is not marked as EOG
+2025-06-15T14:45:02.588186514Z llm_load_vocab: control token: 128053 '<|reserved_special_token_45|>' is not marked as EOG
+2025-06-15T14:45:02.588235938Z llm_load_vocab: control token: 128224 '<|reserved_special_token_216|>' is not marked as EOG
+2025-06-15T14:45:02.588247430Z llm_load_vocab: control token: 128247 '<|reserved_special_token_239|>' is not marked as EOG
+2025-06-15T14:45:02.588370102Z llm_load_vocab: control token: 128251 '<|reserved_special_token_243|>' is not marked as EOG
+2025-06-15T14:45:02.588418805Z llm_load_vocab: control token: 128216 '<|reserved_special_token_208|>' is not marked as EOG
+2025-06-15T14:45:02.588434164Z llm_load_vocab: control token: 128006 '<|start_header_id|>' is not marked as EOG
+2025-06-15T14:45:02.588477526Z llm_load_vocab: control token: 128211 '<|reserved_special_token_203|>' is not marked as EOG
+2025-06-15T14:45:02.588563219Z llm_load_vocab: control token: 128077 '<|reserved_special_token_69|>' is not marked as EOG
+2025-06-15T14:45:02.588611871Z llm_load_vocab: control token: 128237 '<|reserved_special_token_229|>' is not marked as EOG
+2025-06-15T14:45:02.588638662Z llm_load_vocab: control token: 128086 '<|reserved_special_token_78|>' is not marked as EOG
+2025-06-15T14:45:02.588667306Z llm_load_vocab: control token: 128227 '<|reserved_special_token_219|>' is not marked as EOG
+2025-06-15T14:45:02.588803394Z llm_load_vocab: control token: 128058 '<|reserved_special_token_50|>' is not marked as EOG
+2025-06-15T14:45:02.588840144Z llm_load_vocab: control token: 128100 '<|reserved_special_token_92|>' is not marked as EOG
+2025-06-15T14:45:02.588913093Z llm_load_vocab: control token: 128209 '<|reserved_special_token_201|>' is not marked as EOG
+2025-06-15T14:45:02.589096210Z llm_load_vocab: control token: 128084 '<|reserved_special_token_76|>' is not marked as EOG
+2025-06-15T14:45:02.589217139Z llm_load_vocab: control token: 128071 '<|reserved_special_token_63|>' is not marked as EOG
+2025-06-15T14:45:02.589238029Z llm_load_vocab: control token: 128070 '<|reserved_special_token_62|>' is not marked as EOG
+2025-06-15T14:45:02.589554389Z llm_load_vocab: control token: 128049 '<|reserved_special_token_41|>' is not marked as EOG
+2025-06-15T14:45:02.589598703Z llm_load_vocab: control token: 128197 '<|reserved_special_token_189|>' is not marked as EOG
+2025-06-15T14:45:02.589725053Z llm_load_vocab: control token: 128072 '<|reserved_special_token_64|>' is not marked as EOG
+2025-06-15T14:45:02.590277792Z llm_load_vocab: control token: 128000 '<|begin_of_text|>' is not marked as EOG
+2025-06-15T14:45:02.590421925Z llm_load_vocab: control token: 128223 '<|reserved_special_token_215|>' is not marked as EOG
+2025-06-15T14:45:02.590629389Z llm_load_vocab: control token: 128217 '<|reserved_special_token_209|>' is not marked as EOG
+2025-06-15T14:45:02.590664696Z llm_load_vocab: control token: 128111 '<|reserved_special_token_103|>' is not marked as EOG
+2025-06-15T14:45:02.590819249Z llm_load_vocab: control token: 128203 '<|reserved_special_token_195|>' is not marked as EOG
+2025-06-15T14:45:02.591011955Z llm_load_vocab: control token: 128051 '<|reserved_special_token_43|>' is not marked as EOG
+2025-06-15T14:45:02.591381256Z llm_load_vocab: control token: 128030 '<|reserved_special_token_22|>' is not marked as EOG
+2025-06-15T14:45:02.591447662Z llm_load_vocab: control token: 128117 '<|reserved_special_token_109|>' is not marked as EOG
+2025-06-15T14:45:02.591524047Z llm_load_vocab: control token: 128010 '<|python_tag|>' is not marked as EOG
+2025-06-15T14:45:02.591539766Z llm_load_vocab: control token: 128238 '<|reserved_special_token_230|>' is not marked as EOG
+2025-06-15T14:45:02.591616342Z llm_load_vocab: control token: 128255 '<|reserved_special_token_247|>' is not marked as EOG
+2025-06-15T14:45:02.591660906Z llm_load_vocab: control token: 128202 '<|reserved_special_token_194|>' is not marked as EOG
+2025-06-15T14:45:02.591762639Z llm_load_vocab: control token: 128132 '<|reserved_special_token_124|>' is not marked as EOG
+2025-06-15T14:45:02.592009568Z llm_load_vocab: control token: 128248 '<|reserved_special_token_240|>' is not marked as EOG
+2025-06-15T14:45:02.592038713Z llm_load_vocab: control token: 128167 '<|reserved_special_token_159|>' is not marked as EOG
+2025-06-15T14:45:02.592123755Z llm_load_vocab: control token: 128127 '<|reserved_special_token_119|>' is not marked as EOG
+2025-06-15T14:45:02.592129095Z llm_load_vocab: control token: 128105 '<|reserved_special_token_97|>' is not marked as EOG
+2025-06-15T14:45:02.592174671Z llm_load_vocab: control token: 128039 '<|reserved_special_token_31|>' is not marked as EOG
+2025-06-15T14:45:02.592454993Z llm_load_vocab: control token: 128232 '<|reserved_special_token_224|>' is not marked as EOG
+2025-06-15T14:45:02.592617762Z llm_load_vocab: control token: 128166 '<|reserved_special_token_158|>' is not marked as EOG
+2025-06-15T14:45:02.592655584Z llm_load_vocab: control token: 128130 '<|reserved_special_token_122|>' is not marked as EOG
+2025-06-15T14:45:02.592661104Z llm_load_vocab: control token: 128114 '<|reserved_special_token_106|>' is not marked as EOG
+2025-06-15T14:45:02.592675572Z llm_load_vocab: control token: 128234 '<|reserved_special_token_226|>' is not marked as EOG
+2025-06-15T14:45:02.592705098Z llm_load_vocab: control token: 128191 '<|reserved_special_token_183|>' is not marked as EOG
+2025-06-15T14:45:02.592816810Z llm_load_vocab: control token: 128064 '<|reserved_special_token_56|>' is not marked as EOG
+2025-06-15T14:45:02.592992974Z llm_load_vocab: control token: 128140 '<|reserved_special_token_132|>' is not marked as EOG
+2025-06-15T14:45:02.593022640Z llm_load_vocab: control token: 128096 '<|reserved_special_token_88|>' is not marked as EOG
+2025-06-15T14:45:02.593070000Z llm_load_vocab: control token: 128098 '<|reserved_special_token_90|>' is not marked as EOG
+2025-06-15T14:45:02.593131086Z llm_load_vocab: control token: 128192 '<|reserved_special_token_184|>' is not marked as EOG
+2025-06-15T14:45:02.593284928Z llm_load_vocab: control token: 128093 '<|reserved_special_token_85|>' is not marked as EOG
+2025-06-15T14:45:02.593503813Z llm_load_vocab: control token: 128150 '<|reserved_special_token_142|>' is not marked as EOG
+2025-06-15T14:45:02.593597822Z llm_load_vocab: control token: 128222 '<|reserved_special_token_214|>' is not marked as EOG
+2025-06-15T14:45:02.593621687Z llm_load_vocab: control token: 128233 '<|reserved_special_token_225|>' is not marked as EOG
+2025-06-15T14:45:02.593689506Z llm_load_vocab: control token: 128220 '<|reserved_special_token_212|>' is not marked as EOG
+2025-06-15T14:45:02.593777743Z llm_load_vocab: control token: 128034 '<|reserved_special_token_26|>' is not marked as EOG
+2025-06-15T14:45:02.593801969Z llm_load_vocab: control token: 128033 '<|reserved_special_token_25|>' is not marked as EOG
+2025-06-15T14:45:02.593806658Z llm_load_vocab: control token: 128253 '<|reserved_special_token_245|>' is not marked as EOG
+2025-06-15T14:45:02.593855941Z llm_load_vocab: control token: 128195 '<|reserved_special_token_187|>' is not marked as EOG
+2025-06-15T14:45:02.594035031Z llm_load_vocab: control token: 128099 '<|reserved_special_token_91|>' is not marked as EOG
+2025-06-15T14:45:02.594080798Z llm_load_vocab: control token: 128189 '<|reserved_special_token_181|>' is not marked as EOG
+2025-06-15T14:45:02.594124842Z llm_load_vocab: control token: 128210 '<|reserved_special_token_202|>' is not marked as EOG
+2025-06-15T14:45:02.594151302Z llm_load_vocab: control token: 128174 '<|reserved_special_token_166|>' is not marked as EOG
+2025-06-15T14:45:02.594197129Z llm_load_vocab: control token: 128083 '<|reserved_special_token_75|>' is not marked as EOG
+2025-06-15T14:45:02.594202950Z llm_load_vocab: control token: 128080 '<|reserved_special_token_72|>' is not marked as EOG
+2025-06-15T14:45:02.594225112Z llm_load_vocab: control token: 128104 '<|reserved_special_token_96|>' is not marked as EOG
+2025-06-15T14:45:02.594237235Z llm_load_vocab: control token: 128082 '<|reserved_special_token_74|>' is not marked as EOG
+2025-06-15T14:45:02.594317758Z llm_load_vocab: control token: 128219 '<|reserved_special_token_211|>' is not marked as EOG
+2025-06-15T14:45:02.594355139Z llm_load_vocab: control token: 128017 '<|reserved_special_token_9|>' is not marked as EOG
+2025-06-15T14:45:02.594516595Z llm_load_vocab: control token: 128050 '<|reserved_special_token_42|>' is not marked as EOG
+2025-06-15T14:45:02.594606696Z llm_load_vocab: control token: 128205 '<|reserved_special_token_197|>' is not marked as EOG
+2025-06-15T14:45:02.594641352Z llm_load_vocab: control token: 128047 '<|reserved_special_token_39|>' is not marked as EOG
+2025-06-15T14:45:02.594787299Z llm_load_vocab: control token: 128164 '<|reserved_special_token_156|>' is not marked as EOG
+2025-06-15T14:45:02.594806305Z llm_load_vocab: control token: 128020 '<|reserved_special_token_12|>' is not marked as EOG
+2025-06-15T14:45:02.594845720Z llm_load_vocab: control token: 128069 '<|reserved_special_token_61|>' is not marked as EOG
+2025-06-15T14:45:02.595214750Z llm_load_vocab: control token: 128245 '<|reserved_special_token_237|>' is not marked as EOG
+2025-06-15T14:45:02.595295894Z llm_load_vocab: control token: 128121 '<|reserved_special_token_113|>' is not marked as EOG
+2025-06-15T14:45:02.595365726Z llm_load_vocab: control token: 128079 '<|reserved_special_token_71|>' is not marked as EOG
+2025-06-15T14:45:02.595608677Z llm_load_vocab: control token: 128037 '<|reserved_special_token_29|>' is not marked as EOG
+2025-06-15T14:45:02.595721321Z llm_load_vocab: control token: 128244 '<|reserved_special_token_236|>' is not marked as EOG
+2025-06-15T14:45:02.595746519Z llm_load_vocab: control token: 128029 '<|reserved_special_token_21|>' is not marked as EOG
+2025-06-15T14:45:02.595751769Z llm_load_vocab: control token: 128221 '<|reserved_special_token_213|>' is not marked as EOG
+2025-06-15T14:45:02.595914016Z llm_load_vocab: control token: 128066 '<|reserved_special_token_58|>' is not marked as EOG
+2025-06-15T14:45:02.595929225Z llm_load_vocab: control token: 128120 '<|reserved_special_token_112|>' is not marked as EOG
+2025-06-15T14:45:02.596078118Z llm_load_vocab: control token: 128014 '<|reserved_special_token_6|>' is not marked as EOG
+2025-06-15T14:45:02.596337390Z llm_load_vocab: control token: 128025 '<|reserved_special_token_17|>' is not marked as EOG
+2025-06-15T14:45:02.596440836Z llm_load_vocab: control token: 128126 '<|reserved_special_token_118|>' is not marked as EOG
+2025-06-15T14:45:02.596653079Z llm_load_vocab: special tokens cache size = 256
+2025-06-15T14:45:02.650041706Z llm_load_vocab: token to piece cache size = 0.7999 MB
+2025-06-15T14:45:02.650059380Z llm_load_print_meta: format           = GGUF V3 (latest)
+2025-06-15T14:45:02.650062786Z llm_load_print_meta: arch             = llama
+2025-06-15T14:45:02.650066543Z llm_load_print_meta: vocab type       = BPE
+2025-06-15T14:45:02.650069539Z llm_load_print_meta: n_vocab          = 128256
+2025-06-15T14:45:02.650076592Z llm_load_print_meta: n_merges         = 280147
+2025-06-15T14:45:02.650079718Z llm_load_print_meta: vocab_only       = 0
+2025-06-15T14:45:02.650082614Z llm_load_print_meta: n_ctx_train      = 131072
+2025-06-15T14:45:02.650085740Z llm_load_print_meta: n_embd           = 3072
+2025-06-15T14:45:02.650088615Z llm_load_print_meta: n_layer          = 28
+2025-06-15T14:45:02.650091440Z llm_load_print_meta: n_head           = 24
+2025-06-15T14:45:02.650103874Z llm_load_print_meta: n_head_kv        = 8
+2025-06-15T14:45:02.650109394Z llm_load_print_meta: n_rot            = 128
+2025-06-15T14:45:02.650112220Z llm_load_print_meta: n_swa            = 0
+2025-06-15T14:45:02.650114995Z llm_load_print_meta: n_embd_head_k    = 128
+2025-06-15T14:45:02.650117790Z llm_load_print_meta: n_embd_head_v    = 128
+2025-06-15T14:45:02.650120756Z llm_load_print_meta: n_gqa            = 3
+2025-06-15T14:45:02.650123551Z llm_load_print_meta: n_embd_k_gqa     = 1024
+2025-06-15T14:45:02.650126397Z llm_load_print_meta: n_embd_v_gqa     = 1024
+2025-06-15T14:45:02.650129202Z llm_load_print_meta: f_norm_eps       = 0.0e+00
+2025-06-15T14:45:02.650132017Z llm_load_print_meta: f_norm_rms_eps   = 1.0e-05
+2025-06-15T14:45:02.650134853Z llm_load_print_meta: f_clamp_kqv      = 0.0e+00
+2025-06-15T14:45:02.650137668Z llm_load_print_meta: f_max_alibi_bias = 0.0e+00
+2025-06-15T14:45:02.650140483Z llm_load_print_meta: f_logit_scale    = 0.0e+00
+2025-06-15T14:45:02.650143359Z llm_load_print_meta: n_ff             = 8192
+2025-06-15T14:45:02.650146274Z llm_load_print_meta: n_expert         = 8
+2025-06-15T14:45:02.650149370Z llm_load_print_meta: n_expert_used    = 2
+2025-06-15T14:45:02.650156113Z llm_load_print_meta: causal attn      = 1
+2025-06-15T14:45:02.650159109Z llm_load_print_meta: pooling type     = 0
+2025-06-15T14:45:02.650161914Z llm_load_print_meta: rope type        = 0
+2025-06-15T14:45:02.650164719Z llm_load_print_meta: rope scaling     = linear
+2025-06-15T14:45:02.650167525Z llm_load_print_meta: freq_base_train  = 500000.0
+2025-06-15T14:45:02.650170450Z llm_load_print_meta: freq_scale_train = 1
+2025-06-15T14:45:02.650173486Z llm_load_print_meta: n_ctx_orig_yarn  = 131072
+2025-06-15T14:45:02.650176392Z llm_load_print_meta: rope_finetuned   = unknown
+2025-06-15T14:45:02.650179207Z llm_load_print_meta: ssm_d_conv       = 0
+2025-06-15T14:45:02.650182032Z llm_load_print_meta: ssm_d_inner      = 0
+2025-06-15T14:45:02.650184838Z llm_load_print_meta: ssm_d_state      = 0
+2025-06-15T14:45:02.650187623Z llm_load_print_meta: ssm_dt_rank      = 0
+2025-06-15T14:45:02.650190438Z llm_load_print_meta: ssm_dt_b_c_rms   = 0
+2025-06-15T14:45:02.650193604Z llm_load_print_meta: model type       = ?B
+2025-06-15T14:45:02.650196410Z llm_load_print_meta: model ftype      = Q5_K - Medium
+2025-06-15T14:45:02.650199285Z llm_load_print_meta: model params     = 18.40 B
+2025-06-15T14:45:02.650202150Z llm_load_print_meta: model size       = 12.25 GiB (5.72 BPW)
+2025-06-15T14:45:02.650205236Z llm_load_print_meta: general.name     = L3.2 MOE 8X3 Series2
+2025-06-15T14:45:02.650208122Z llm_load_print_meta: BOS token        = 128000 '<|begin_of_text|>'
+2025-06-15T14:45:02.650211368Z llm_load_print_meta: EOS token        = 128009 '<|eot_id|>'
+2025-06-15T14:45:02.650214213Z llm_load_print_meta: EOT token        = 128009 '<|eot_id|>'
+2025-06-15T14:45:02.650217089Z llm_load_print_meta: EOM token        = 128008 '<|eom_id|>'
+2025-06-15T14:45:02.650219954Z llm_load_print_meta: PAD token        = 128000 '<|begin_of_text|>'
+2025-06-15T14:45:02.650222860Z llm_load_print_meta: LF token         = 128 'Ä'
+2025-06-15T14:45:02.650225715Z llm_load_print_meta: EOG token        = 128008 '<|eom_id|>'
+2025-06-15T14:45:02.650228510Z llm_load_print_meta: EOG token        = 128009 '<|eot_id|>'
+2025-06-15T14:45:02.650231326Z llm_load_print_meta: max token length = 256
+2025-06-15T14:45:02.652266568Z llm_load_tensors: tensor 'token_embd.weight' (q5_K) (and 0 others) cannot be used with preferred buffer type CPU_AARCH64, using CPU instead
+2025-06-15T14:45:17.205335484Z llm_load_tensors: offloading 28 repeating layers to GPU
+2025-06-15T14:45:17.205368096Z llm_load_tensors: offloading output layer to GPU
+2025-06-15T14:45:17.205372043Z llm_load_tensors: offloaded 29/29 layers to GPU
+2025-06-15T14:45:17.205374929Z llm_load_tensors:        CUDA0 model buffer size = 12281.53 MiB
+2025-06-15T14:45:17.205377964Z llm_load_tensors:   CPU_Mapped model buffer size =   258.33 MiB
+2025-06-15T14:45:18.966523707Z .............................................................................................
+2025-06-15T14:45:18.976352546Z llama_new_context_with_model: n_seq_max     = 1
+2025-06-15T14:45:18.976367224Z llama_new_context_with_model: n_ctx         = 16384
+2025-06-15T14:45:18.976382543Z llama_new_context_with_model: n_ctx_per_seq = 16384
+2025-06-15T14:45:18.976386310Z llama_new_context_with_model: n_batch       = 512
+2025-06-15T14:45:18.976389486Z llama_new_context_with_model: n_ubatch      = 512
+2025-06-15T14:45:18.976392462Z llama_new_context_with_model: flash_attn    = 0
+2025-06-15T14:45:18.976397651Z llama_new_context_with_model: freq_base     = 500000.0
+2025-06-15T14:45:18.976422839Z llama_new_context_with_model: freq_scale    = 1
+2025-06-15T14:45:18.976426155Z llama_new_context_with_model: n_ctx_per_seq (16384) < n_ctx_train (131072) -- the full capacity of the model will not be utilized
+2025-06-15T14:45:18.984539319Z llama_kv_cache_init:      CUDA0 KV buffer size =  1792.00 MiB
+2025-06-15T14:45:18.984557153Z llama_new_context_with_model: KV self size  = 1792.00 MiB, K (f16):  896.00 MiB, V (f16):  896.00 MiB
+2025-06-15T14:45:18.985702867Z llama_new_context_with_model:  CUDA_Host  output buffer size =     0.49 MiB
+2025-06-15T14:45:19.014543017Z llama_new_context_with_model:      CUDA0 compute buffer size =   824.00 MiB
+2025-06-15T14:45:19.014564818Z llama_new_context_with_model:  CUDA_Host compute buffer size =    38.01 MiB
+2025-06-15T14:45:19.014568675Z llama_new_context_with_model: graph nodes  = 1322
+2025-06-15T14:45:19.014572573Z llama_new_context_with_model: graph splits = 2
+2025-06-15T14:45:19.015266720Z CUDA : ARCHS = 500,520,530,600,610,620,700,720,750,800,860,870,890,900 | FORCE_MMQ = 1 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | LLAMAFILE = 1 | OPENMP = 1 | AARCH64_REPACK = 1 |
+2025-06-15T14:45:19.016040508Z Model metadata: {'tokenizer.chat_template': '{{- bos_token }}\n{%- if custom_tools is defined %}\n    {%- set tools = custom_tools %}\n{%- endif %}\n{%- if not tools_in_user_message is defined %}\n    {%- set tools_in_user_message = true %}\n{%- endif %}\n{%- if not date_string is defined %}\n    {%- if strftime_now is defined %}\n        {%- set date_string = strftime_now("%d %b %Y") %}\n    {%- else %}\n        {%- set date_string = "26 Jul 2024" %}\n    {%- endif %}\n{%- endif %}\n{%- if not tools is defined %}\n    {%- set tools = none %}\n{%- endif %}\n\n{#- This block extracts the system message, so we can slot it into the right place. #}\n{%- if messages[0][\'role\'] == \'system\' %}\n    {%- set system_message = messages[0][\'content\']|trim %}\n    {%- set messages = messages[1:] %}\n{%- else %}\n    {%- set system_message = "" %}\n{%- endif %}\n\n{#- System message #}\n{{- "<|start_header_id|>system<|end_header_id|>\\n\\n" }}\n{%- if tools is not none %}\n    {{- "Environment: ipython\\n" }}\n{%- endif %}\n{{- "Cutting Knowledge Date: December 2023\\n" }}\n{{- "Today Date: " + date_string + "\\n\\n" }}\n{%- if tools is not none and not tools_in_user_message %}\n    {{- "You have access to the following functions. To call a function, please respond with JSON for a function call." }}\n    {{- \'Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}.\' }}\n    {{- "Do not use variables.\\n\\n" }}\n    {%- for t in tools %}\n        {{- t | tojson(indent=4) }}\n        {{- "\\n\\n" }}\n    {%- endfor %}\n{%- endif %}\n{{- system_message }}\n{{- "<|eot_id|>" }}\n\n{#- Custom tools are passed in a user message with some extra guidance #}\n{%- if tools_in_user_message and not tools is none %}\n    {#- Extract the first user message so we can plug it in here #}\n    {%- if messages | length != 0 %}\n        {%- set first_user_message = messages[0][\'content\']|trim %}\n        {%- set messages = messages[1:] %}\n    {%- else %}\n        {{- raise_exception("Cannot put tools in the first user message when there\'s no first user message!") }}\n{%- endif %}\n    {{- \'<|start_header_id|>user<|end_header_id|>\\n\\n\' -}}\n    {{- "Given the following functions, please respond with a JSON for a function call " }}\n    {{- "with its proper arguments that best answers the given prompt.\\n\\n" }}\n    {{- \'Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}.\' }}\n    {{- "Do not use variables.\\n\\n" }}\n    {%- for t in tools %}\n        {{- t | tojson(indent=4) }}\n        {{- "\\n\\n" }}\n    {%- endfor %}\n    {{- first_user_message + "<|eot_id|>"}}\n{%- endif %}\n\n{%- for message in messages %}\n    {%- if not (message.role == \'ipython\' or message.role == \'tool\' or \'tool_calls\' in message) %}\n        {{- \'<|start_header_id|>\' + message[\'role\'] + \'<|end_header_id|>\\n\\n\'+ message[\'content\'] | trim + \'<|eot_id|>\' }}\n    {%- elif \'tool_calls\' in message %}\n        {%- if not message.tool_calls|length == 1 %}\n            {{- raise_exception("This model only supports single tool-calls at once!") }}\n        {%- endif %}\n        {%- set tool_call = message.tool_calls[0].function %}\n        {{- \'<|start_header_id|>assistant<|end_header_id|>\\n\\n\' -}}\n        {{- \'{"name": "\' + tool_call.name + \'", \' }}\n        {{- \'"parameters": \' }}\n        {{- tool_call.arguments | tojson }}\n        {{- "}" }}\n        {{- "<|eot_id|>" }}\n    {%- elif message.role == "tool" or message.role == "ipython" %}\n        {{- "<|start_header_id|>ipython<|end_header_id|>\\n\\n" }}\n        {%- if message.content is mapping or message.content is iterable %}\n            {{- message.content | tojson }}\n        {%- else %}\n            {{- message.content }}\n        {%- endif %}\n        {{- "<|eot_id|>" }}\n    {%- endif %}\n{%- endfor %}\n{%- if add_generation_prompt %}\n    {{- \'<|start_header_id|>assistant<|end_header_id|>\\n\\n\' }}\n{%- endif %}\n', 'tokenizer.ggml.eos_token_id': '128009', 'general.quantization_version': '2', 'tokenizer.ggml.model': 'gpt2', 'llama.rope.dimension_count': '128', 'llama.vocab_size': '128256', 'general.file_type': '17', 'llama.attention.value_length': '128', 'llama.attention.key_length': '128', 'llama.expert_count': '8', 'llama.attention.layer_norm_rms_epsilon': '0.000010', 'general.architecture': 'llama', 'llama.rope.freq_base': '500000.000000', 'tokenizer.ggml.padding_token_id': '128000', 'general.basename': 'L3.2-MOE', 'tokenizer.ggml.bos_token_id': '128000', 'llama.attention.head_count': '24', 'tokenizer.ggml.pre': 'llama-bpe', 'llama.expert_used_count': '2', 'llama.context_length': '131072', 'general.name': 'L3.2 MOE 8X3 Series2', 'general.finetune': '8X3-series2', 'general.type': 'model', 'general.size_label': '8x3.6B', 'llama.embedding_length': '3072', 'llama.feed_forward_length': '8192', 'llama.block_count': '28', 'llama.attention.head_count_kv': '8'}
+2025-06-15T14:45:19.016072719Z Available chat formats from metadata: chat_template.default
+2025-06-15T14:45:19.034848875Z Using gguf chat template: {{- bos_token }}
+2025-06-15T14:45:19.034867210Z {%- if custom_tools is defined %}
+2025-06-15T14:45:19.034871017Z     {%- set tools = custom_tools %}
+2025-06-15T14:45:19.034874083Z {%- endif %}
+2025-06-15T14:45:19.034877479Z {%- if not tools_in_user_message is defined %}
+2025-06-15T14:45:19.034880595Z     {%- set tools_in_user_message = true %}
+2025-06-15T14:45:19.034883631Z {%- endif %}
+2025-06-15T14:45:19.034886977Z {%- if not date_string is defined %}
+2025-06-15T14:45:19.034890464Z     {%- if strftime_now is defined %}
+2025-06-15T14:45:19.034894061Z         {%- set date_string = strftime_now("%d %b %Y") %}
+2025-06-15T14:45:19.034898048Z     {%- else %}
+2025-06-15T14:45:19.034901164Z         {%- set date_string = "26 Jul 2024" %}
+2025-06-15T14:45:19.034904190Z     {%- endif %}
+2025-06-15T14:45:19.034907737Z {%- endif %}
+2025-06-15T14:45:19.034911193Z {%- if not tools is defined %}
+2025-06-15T14:45:19.034915071Z     {%- set tools = none %}
+2025-06-15T14:45:19.034918287Z {%- endif %}
+2025-06-15T14:45:19.034924649Z {#- This block extracts the system message, so we can slot it into the right place. #}
+2025-06-15T14:45:19.034928105Z {%- if messages[0]['role'] == 'system' %}
+2025-06-15T14:45:19.034942503Z     {%- set system_message = messages[0]['content']|trim %}
+2025-06-15T14:45:19.034951379Z     {%- set messages = messages[1:] %}
+2025-06-15T14:45:19.034954375Z {%- else %}
+2025-06-15T14:45:19.034957311Z     {%- set system_message = "" %}
+2025-06-15T14:45:19.034971969Z {%- endif %}
+2025-06-15T14:45:19.034987648Z {#- System message #}
+2025-06-15T14:45:19.034992628Z {{- "<|start_header_id|>system<|end_header_id|>\n\n" }}
+2025-06-15T14:45:19.034998940Z {%- if tools is not none %}
+2025-06-15T14:45:19.035004120Z     {{- "Environment: ipython\n" }}
+2025-06-15T14:45:19.035010011Z {%- endif %}
+2025-06-15T14:45:19.035015000Z {{- "Cutting Knowledge Date: December 2023\n" }}
+2025-06-15T14:45:19.035020731Z {{- "Today Date: " + date_string + "\n\n" }}
+2025-06-15T14:45:19.035025410Z {%- if tools is not none and not tools_in_user_message %}
+2025-06-15T14:45:19.035032173Z     {{- "You have access to the following functions. To call a function, please respond with JSON for a function call." }}
+2025-06-15T14:45:19.035036401Z     {{- 'Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}.' }}
+2025-06-15T14:45:19.035039597Z     {{- "Do not use variables.\n\n" }}
+2025-06-15T14:45:19.035042793Z     {%- for t in tools %}
+2025-06-15T14:45:19.035046480Z         {{- t | tojson(indent=4) }}
+2025-06-15T14:45:19.035050007Z         {{- "\n\n" }}
+2025-06-15T14:45:19.035053193Z     {%- endfor %}
+2025-06-15T14:45:19.035056519Z {%- endif %}
+2025-06-15T14:45:19.035061789Z {{- system_message }}
+2025-06-15T14:45:19.035067650Z {{- "<|eot_id|>" }}
+2025-06-15T14:45:19.035078511Z {#- Custom tools are passed in a user message with some extra guidance #}
+2025-06-15T14:45:19.035083200Z {%- if tools_in_user_message and not tools is none %}
+2025-06-15T14:45:19.035089031Z     {#- Extract the first user message so we can plug it in here #}
+2025-06-15T14:45:19.035093950Z     {%- if messages | length != 0 %}
+2025-06-15T14:45:19.035099541Z         {%- set first_user_message = messages[0]['content']|trim %}
+2025-06-15T14:45:19.035104249Z         {%- set messages = messages[1:] %}
+2025-06-15T14:45:19.035109900Z     {%- else %}
+2025-06-15T14:45:19.035114649Z         {{- raise_exception("Cannot put tools in the first user message when there's no first user message!") }}
+2025-06-15T14:45:19.035120550Z {%- endif %}
+2025-06-15T14:45:19.035125800Z     {{- '<|start_header_id|>user<|end_header_id|>\n\n' -}}
+2025-06-15T14:45:19.035129598Z     {{- "Given the following functions, please respond with a JSON for a function call " }}
+2025-06-15T14:45:19.035133265Z     {{- "with its proper arguments that best answers the given prompt.\n\n" }}
+2025-06-15T14:45:19.035136551Z     {{- 'Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}.' }}
+2025-06-15T14:45:19.035139717Z     {{- "Do not use variables.\n\n" }}
+2025-06-15T14:45:19.035143484Z     {%- for t in tools %}
+2025-06-15T14:45:19.035147642Z         {{- t | tojson(indent=4) }}
+2025-06-15T14:45:19.035151539Z         {{- "\n\n" }}
+2025-06-15T14:45:19.035155366Z     {%- endfor %}
+2025-06-15T14:45:19.035159254Z     {{- first_user_message + "<|eot_id|>"}}
+2025-06-15T14:45:19.035163261Z {%- endif %}
+2025-06-15T14:45:19.035172409Z {%- for message in messages %}
+2025-06-15T14:45:19.035181566Z     {%- if not (message.role == 'ipython' or message.role == 'tool' or 'tool_calls' in message) %}
+2025-06-15T14:45:19.035188299Z         {{- '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n'+ message['content'] | trim + '<|eot_id|>' }}
+2025-06-15T14:45:19.035192086Z     {%- elif 'tool_calls' in message %}
+2025-06-15T14:45:19.035197406Z         {%- if not message.tool_calls|length == 1 %}
+2025-06-15T14:45:19.035206293Z             {{- raise_exception("This model only supports single tool-calls at once!") }}
+2025-06-15T14:45:19.035212284Z         {%- endif %}
+2025-06-15T14:45:19.035216062Z         {%- set tool_call = message.tool_calls[0].function %}
+2025-06-15T14:45:19.035220821Z         {{- '<|start_header_id|>assistant<|end_header_id|>\n\n' -}}
+2025-06-15T14:45:19.035226331Z         {{- '{"name": "' + tool_call.name + '", ' }}
+2025-06-15T14:45:19.035234126Z         {{- '"parameters": ' }}
+2025-06-15T14:45:19.035240728Z         {{- tool_call.arguments | tojson }}
+2025-06-15T14:45:19.035244756Z         {{- "}" }}
+2025-06-15T14:45:19.035250186Z         {{- "<|eot_id|>" }}
+2025-06-15T14:45:19.035258803Z     {%- elif message.role == "tool" or message.role == "ipython" %}
+2025-06-15T14:45:19.035270976Z         {{- "<|start_header_id|>ipython<|end_header_id|>\n\n" }}
+2025-06-15T14:45:19.035283690Z         {%- if message.content is mapping or message.content is iterable %}
+2025-06-15T14:45:19.035290132Z             {{- message.content | tojson }}
+2025-06-15T14:45:19.035294821Z         {%- else %}
+2025-06-15T14:45:19.035300933Z             {{- message.content }}
+2025-06-15T14:45:19.035305762Z         {%- endif %}
+2025-06-15T14:45:19.035312414Z         {{- "<|eot_id|>" }}
+2025-06-15T14:45:19.035317153Z     {%- endif %}
+2025-06-15T14:45:19.035323596Z {%- endfor %}
+2025-06-15T14:45:19.035327653Z {%- if add_generation_prompt %}
+2025-06-15T14:45:19.035331791Z     {{- '<|start_header_id|>assistant<|end_header_id|>\n\n' }}
+2025-06-15T14:45:19.035335338Z {%- endif %}
+2025-06-15T14:45:19.035347762Z Using chat eos_token: <|eot_id|>
+2025-06-15T14:45:19.035352390Z Using chat bos_token: <|begin_of_text|>
+2025-06-15T14:45:19.035360135Z handler_llama_ai.py :164  2025-06-15 14:45:19,034 ✅ 模型GPU加载成功
+2025-06-15T14:45:19.078151376Z handler_llama_ai.py :61   2025-06-15 14:45:19,077 🔥 GPU状态: 利用率4%, 显存14.7/22.5GB, 温度37.0°C
+2025-06-15T14:45:19.078178918Z handler_llama_ai.py :210  2025-06-15 14:45:19,078 ✅ 模型初始化完成: /runpod-volume/text_models/L3.2-8X3B.gguf
+2025-06-15T14:45:19.078207482Z handler_llama_ai.py :266  2025-06-15 14:45:19,078 💭 生成响应 (人格: default, 流式: False)
+2025-06-15T14:45:19.078285500Z handler_llama_ai.py :267  2025-06-15 14:45:19,078 📝 原始输入: 'hey'
+2025-06-15T14:45:19.078307211Z handler_llama_ai.py :269  2025-06-15 14:45:19,078 📚 历史记录数量: 1
+2025-06-15T14:45:19.078375271Z handler_llama_ai.py :273  2025-06-15 14:45:19,078 📝 格式化后长度: 381
+2025-06-15T14:45:19.142724294Z handler_llama_ai.py :61   2025-06-15 14:45:19,142 🔥 GPU状态: 利用率4%, 显存14.7/22.5GB, 温度37.0°C
+2025-06-15T14:45:19.144033809Z /usr/local/lib/python3.10/dist-packages/llama_cpp/llama.py:1237: RuntimeWarning: Detected duplicate leading "<|begin_of_text|>" in prompt, this will likely reduce response quality, consider removing it...
+2025-06-15T14:45:19.144044539Z   warnings.warn(
+2025-06-15T14:45:19.609756877Z llama_perf_context_print:        load time =     170.65 ms
+2025-06-15T14:45:19.609787345Z llama_perf_context_print: prompt eval time =       0.00 ms /    69 tokens (    0.00 ms per token,      inf tokens per second)
+2025-06-15T14:45:19.609791724Z llama_perf_context_print:        eval time =       0.00 ms /    13 runs   (    0.00 ms per token,      inf tokens per second)
+2025-06-15T14:45:19.609794819Z llama_perf_context_print:       total time =     465.30 ms /    82 tokens
+2025-06-15T14:45:19.654293509Z handler_llama_ai.py :61   2025-06-15 14:45:19,654 🔥 GPU状态: 利用率82%, 显存14.8/22.5GB, 温度39.0°C
+2025-06-15T14:45:19.654317234Z handler_llama_ai.py :334  2025-06-15 14:45:19,654 ⚡ 生成完成: 0.47秒
+2025-06-15T14:45:19.654350788Z handler_llama_ai.py :335  2025-06-15 14:45:19,654 📤 原始响应: '👋 How's your day going so far? 😊'
+2025-06-15T14:45:19.654406884Z handler_llama_ai.py :341  2025-06-15 14:45:19,654 📤 清理后响应: '👋 How's your day going so far? 😊' (长度: 32)
+2025-06-15T14:45:19.654548343Z handler_llama_ai.py :416  2025-06-15 14:45:19,654 ✅ 最终返回结果: {
+2025-06-15T14:45:19.654555246Z   "status": "COMPLETED",
+2025-06-15T14:45:19.654559394Z   "output": "👋 How's your day going so far? 😊",
+2025-06-15T14:45:19.654563541Z   "model_info": "模型: L3.2-8X3B.gguf",
+2025-06-15T14:45:19.654567659Z   "stream": false
+2025-06-15T14:45:19.654571046Z }
+2025-06-15T14:45:19.963848038Z {"requestId": "sync-2407412e-6dac-49c6-80a7-8f37cd0a5bbf-u2", "message": "Finished.", "level": "INFO"}

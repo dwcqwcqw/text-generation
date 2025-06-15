@@ -318,8 +318,9 @@ export default function ChatPage() {
               console.log('🔍 output类型:', typeof data.output)
               console.log('🔍 output内容:', data.output)
               
-              if (data.status === "COMPLETED" && data.output) {
-                console.log('✅ 状态为COMPLETED且有output')
+              // 无论status如何，只要有output就处理
+              if (data.output !== null && data.output !== undefined) {
+                console.log('✅ 发现output字段，开始处理')
                 
                 if (typeof data.output === 'string') {
                   console.log('✅ output是字符串类型')
@@ -345,17 +346,9 @@ export default function ChatPage() {
                     aiResponse = JSON.stringify(data.output)
                   }
                 } else {
-                  console.log('⚠️ output既不是字符串也不是对象')
+                  console.log('⚠️ output既不是字符串也不是对象，强制转换为字符串')
                   aiResponse = String(data.output)
                 }
-              } else if (data.output) {
-                console.log('⚠️ 状态不是COMPLETED但有output，直接使用')
-                if (typeof data.output === 'string') {
-                  aiResponse = data.output.trim()
-                } else {
-                  aiResponse = String(data.output)
-                }
-                console.log('📤 直接使用output:', aiResponse)
               } else if (data.result) {
                 console.log('⚠️ 没有output，尝试使用result字段')
                 aiResponse = typeof data.result === 'string' ? data.result.trim() : String(data.result)
