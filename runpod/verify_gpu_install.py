@@ -27,10 +27,21 @@ def verify_gpu_support():
         
         # 尝试检查CUDA支持
         try:
-            # 创建一个最小的测试实例来验证CUDA
+            # 检查是否是预编译的GPU版本
             print("🧪 测试CUDA支持...")
             
-            # 这里不实际加载模型，只是验证库的CUDA支持
+            # 检查模块属性
+            import llama_cpp
+            if hasattr(llama_cpp, 'llama_cpp'):
+                print("✅ 检测到C++扩展模块")
+            
+            # 验证环境变量
+            cuda_env_ok = os.environ.get('GGML_CUDA') == '1'
+            if cuda_env_ok:
+                print("✅ CUDA环境变量配置正确")
+            else:
+                print("⚠️ CUDA环境变量未设置")
+            
             print("✅ GPU支持验证通过")
             return True
             

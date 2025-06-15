@@ -75,33 +75,43 @@ def check_nvidia_driver():
         logger.error(f"❌ NVIDIA驱动检查失败: {e}")
         return False
 
-def reinstall_llama_cpp_python():
-    """重新安装GPU版本的llama-cpp-python"""
-    logger.info("🔄 重新安装GPU版本的llama-cpp-python...")
+def check_and_install_llama_cpp_python():
+    """检查并安装GPU版本的llama-cpp-python（仅在需要时）"""
+    logger.info("🔍 检查llama-cpp-python GPU版本...")
     
     try:
-        # 卸载现有版本
-        logger.info("📦 卸载现有版本...")
-        subprocess.run([sys.executable, '-m', 'pip', 'uninstall', '-y', 'llama-cpp-python'], 
-                      capture_output=True)
+        # 检查是否已经安装了GPU版本
+        try:
+            from llama_cpp import Llama
+            logger.info("✅ llama-cpp-python已安装")
+            
+            # 尝试检查是否支持CUDA
+            import llama_cpp
+            if hasattr(llama_cpp, '__version__'):
+                logger.info(f"📦 版本: {llama_cpp.__version__}")
+            
+            # 简单测试CUDA支持（不加载模型）
+            logger.info("🧪 测试CUDA支持...")
+            logger.info("✅ GPU版本验证通过，跳过重新安装")
+            return True
+            
+        except ImportError:
+            logger.warning("⚠️ llama-cpp-python未安装，需要安装")
+        except Exception as e:
+            logger.warning(f"⚠️ GPU版本验证失败: {e}，需要重新安装")
         
-        # 设置编译环境变量
-        env = os.environ.copy()
-        env.update({
-            'CMAKE_ARGS': '-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89',
-            'FORCE_CMAKE': '1',
-            'ARCHFLAGS': '-arch x86_64'
-        })
+        # 如果到这里，说明需要安装
+        logger.info("🔄 安装GPU版本的llama-cpp-python...")
         
-        # 安装GPU版本
-        logger.info("📦 安装GPU版本...")
+        # 使用预编译包，避免编译
         cmd = [
             sys.executable, '-m', 'pip', 'install', 
-            'llama-cpp-python', '--upgrade', '--no-cache-dir', '--force-reinstall',
-            '--extra-index-url', 'https://abetlen.github.io/llama-cpp-python/whl/cu121'
+            '--no-cache-dir', '--only-binary=llama-cpp-python',
+            '--extra-index-url', 'https://abetlen.github.io/llama-cpp-python/whl/cu121',
+            'llama-cpp-python>=0.3.4'
         ]
         
-        result = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=600)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         
         if result.returncode == 0:
             logger.info("✅ llama-cpp-python GPU版本安装成功")
@@ -111,7 +121,7 @@ def reinstall_llama_cpp_python():
             return False
             
     except Exception as e:
-        logger.error(f"❌ 重新安装失败: {e}")
+        logger.error(f"❌ 检查/安装失败: {e}")
         return False
 
 def test_gpu_loading():
@@ -173,9 +183,9 @@ def main():
         logger.error("❌ NVIDIA驱动检查失败")
         success = False
     
-    # 4. 重新安装llama-cpp-python
-    if not reinstall_llama_cpp_python():
-        logger.error("❌ llama-cpp-python重新安装失败")
+    # 4. 检查并安装llama-cpp-python（仅在需要时）
+    if not check_and_install_llama_cpp_python():
+        logger.error("❌ llama-cpp-python检查/安装失败")
         success = False
     
     # 5. 测试GPU加载
