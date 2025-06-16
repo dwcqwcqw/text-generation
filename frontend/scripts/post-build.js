@@ -25,18 +25,17 @@ if (fs.existsSync(publicRedirectsPath)) {
 
 // 创建_headers文件，设置正确的MIME类型 - 使用最简单的格式
 const headersContent = `/*
-  Content-Type: text/html; charset=UTF-8
   X-Content-Type-Options: nosniff
   Access-Control-Allow-Origin: *
 
 *.js
-  Content-Type: application/javascript; charset=utf-8
+  Content-Type: application/javascript
 
 *.css
-  Content-Type: text/css; charset=utf-8
+  Content-Type: text/css
 
 *.json
-  Content-Type: application/json; charset=utf-8
+  Content-Type: application/json
 `;
 
 fs.writeFileSync(path.join(outDir, '_headers'), headersContent);
