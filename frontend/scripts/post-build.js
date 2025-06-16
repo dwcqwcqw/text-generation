@@ -23,19 +23,24 @@ if (fs.existsSync(publicRedirectsPath)) {
   console.log('✅ Copied _redirects file to output directory');
 }
 
-// 创建_headers文件，设置正确的MIME类型 - 使用最简单的格式
-const headersContent = `/*
+// 创建_headers文件，设置正确的MIME类型 - 使用Cloudflare Pages支持的格式
+const headersContent = `/_next/static/chunks/*.js
+  Content-Type: application/javascript
+  Cache-Control: public, max-age=31536000, immutable
+
+/_next/static/css/*.css
+  Content-Type: text/css
+  Cache-Control: public, max-age=31536000, immutable
+
+/fix-mime.js
+  Content-Type: application/javascript
+  Cache-Control: public, max-age=3600
+
+/*
   X-Content-Type-Options: nosniff
   Access-Control-Allow-Origin: *
-
-*.js
-  Content-Type: application/javascript
-
-*.css
-  Content-Type: text/css
-
-*.json
-  Content-Type: application/json
+  X-Frame-Options: DENY
+  X-XSS-Protection: 1; mode=block
 `;
 
 fs.writeFileSync(path.join(outDir, '_headers'), headersContent);
