@@ -1,15 +1,13 @@
 /*
+  Content-Type: text/html; charset=UTF-8
   X-Content-Type-Options: nosniff
   Access-Control-Allow-Origin: *
 
-# 确保所有JavaScript文件使用正确的MIME类型
 *.js
   Content-Type: application/javascript
 
-# 确保所有CSS文件使用正确的MIME类型
 *.css
   Content-Type: text/css
 
-# 设置静态资源缓存
-/_next/static/*
-  Cache-Control: public, max-age=31536000, immutable 
+*.json
+  Content-Type: application/json 

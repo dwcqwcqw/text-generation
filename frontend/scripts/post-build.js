@@ -17,17 +17,18 @@ filesToRemove.forEach(filename => {
 
 // 创建_headers文件，设置正确的MIME类型 - 使用最简单的格式
 const headersContent = `/*
+  Content-Type: text/html; charset=UTF-8
   X-Content-Type-Options: nosniff
   Access-Control-Allow-Origin: *
 
-/_next/static/chunks/*.js
+*.js
   Content-Type: application/javascript
 
-/_next/static/css/*.css
+*.css
   Content-Type: text/css
 
-/_next/static/*
-  Cache-Control: public, max-age=31536000, immutable
+*.json
+  Content-Type: application/json
 `;
 
 fs.writeFileSync(path.join(outDir, '_headers'), headersContent);
