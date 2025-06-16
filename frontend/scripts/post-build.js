@@ -15,20 +15,17 @@ filesToRemove.forEach(filename => {
   }
 });
 
-// 创建_headers文件，设置正确的MIME类型
+// 创建_headers文件，设置正确的MIME类型 - 使用最简单的格式
 const headersContent = `/*
   X-Content-Type-Options: nosniff
   Access-Control-Allow-Origin: *
 
-# 确保所有JavaScript文件使用正确的MIME类型
-*.js
+/_next/static/chunks/*.js
   Content-Type: application/javascript
 
-# 确保所有CSS文件使用正确的MIME类型
-*.css
+/_next/static/css/*.css
   Content-Type: text/css
 
-# 设置静态资源缓存
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
 `;
@@ -40,7 +37,7 @@ console.log('✅ Created _headers file with proper MIME types');
 const routesContent = `{
   "version": 1,
   "include": ["/*"],
-  "exclude": ["/_next/static/*"]
+  "exclude": []
 }`;
 
 fs.writeFileSync(path.join(outDir, '_routes.json'), routesContent);
