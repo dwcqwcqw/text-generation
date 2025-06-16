@@ -79,8 +79,25 @@ export default function ChatPage() {
 
   // 初始化：创建新对话
   useEffect(() => {
-    createNewChat()
+    if (!currentSession) {
+      console.log('🔄 初始化：创建新对话')
+      createNewChat()
+    } else {
+      console.log('🔄 初始化：已有对话，跳过创建', currentSession.id)
+    }
   }, [])
+
+  // 添加调试日志，监控currentSession变化
+  useEffect(() => {
+    console.log('🧪 currentSession 更新:', 
+      currentSession ? 
+      { 
+        id: currentSession.id, 
+        title: currentSession.title, 
+        messagesCount: currentSession.messages.length 
+      } : 'null'
+    )
+  }, [currentSession])
 
   // 搜索功能
   useEffect(() => {
@@ -181,15 +198,20 @@ export default function ChatPage() {
       timestamp: new Date()
     }
 
+    // 保存当前会话ID，用于后续确认是否仍在同一会话中
+    const currentSessionId = currentSession?.id
+    console.log('🔄 开始生成回复，当前会话ID:', currentSessionId)
+
     // 更新会话，添加用户消息
     let updatedSession = currentSession
     if (currentSession) {
       const updatedMessages = [...history, userMessage]
       updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
       
+      // 立即更新当前会话和会话列表
       setCurrentSession(updatedSession)
       setChatSessions(prev => 
-        prev.map(s => s.id === currentSession.id ? updatedSession! : s)
+        prev.map(s => s.id === currentSessionId ? updatedSession! : s)
       )
 
       // 如果是第一条消息，更新会话标题
@@ -233,6 +255,12 @@ export default function ChatPage() {
       // 首先尝试RunPod API调用（如果有API Key）
       if (FINAL_API_KEY) {
         try {
+          // 再次确认会话ID是否一致
+          if (currentSession?.id !== currentSessionId) {
+            console.warn('⚠️ API调用前会话ID已变化，从', currentSessionId, '变为', currentSession?.id)
+            // 如果会话ID已变，可能用户切换了会话，需要谨慎处理
+          }
+          
           // 准备对话历史 - 确保内容是字符串格式，过滤[object Object]
           const conversationHistory = history.map(msg => ({
             role: msg.role,
@@ -282,13 +310,29 @@ export default function ChatPage() {
 
           // 添加AI响应消息到当前会话
           if (updatedSession) {
-            const updatedMessages = [...updatedSession.messages, streamingMessage]
-            updatedSession = { ...updatedSession, messages: updatedMessages, lastMessage: new Date() }
-            
-            setCurrentSession(updatedSession)
-            setChatSessions(prev => 
-              prev.map(s => s.id === updatedSession!.id ? updatedSession! : s)
-            )
+            // 再次确认会话ID是否一致
+            if (currentSession?.id !== currentSessionId) {
+              console.warn('⚠️ 添加AI响应前会话ID已变化，从', currentSessionId, '变为', currentSession?.id)
+              // 如果会话ID已变，尝试在当前会话中添加消息
+              if (currentSession) {
+                const updatedMessages = [...currentSession.messages, streamingMessage]
+                const newUpdatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+                
+                setCurrentSession(newUpdatedSession)
+                setChatSessions(prev => 
+                  prev.map(s => s.id === currentSession.id ? newUpdatedSession : s)
+                )
+              }
+            } else {
+              // 会话ID一致，正常添加消息
+              const updatedMessages = [...updatedSession.messages, streamingMessage]
+              updatedSession = { ...updatedSession, messages: updatedMessages, lastMessage: new Date() }
+              
+              setCurrentSession(updatedSession)
+              setChatSessions(prev => 
+                prev.map(s => s.id === updatedSession!.id ? updatedSession! : s)
+              )
+            }
           }
           
           const response = await fetch(RUNPOD_ENDPOINT, {
@@ -428,13 +472,29 @@ export default function ChatPage() {
                 
                 // 添加AI响应消息到当前会话
                 if (updatedSession) {
-                  const updatedMessages = [...updatedSession.messages, streamingMessage]
-                  updatedSession = { ...updatedSession, messages: updatedMessages, lastMessage: new Date() }
-                  
-                  setCurrentSession(updatedSession)
-                  setChatSessions(prev => 
-                    prev.map(s => s.id === updatedSession!.id ? updatedSession! : s)
-                  )
+                  // 再次确认会话ID是否一致
+                  if (currentSession?.id !== currentSessionId) {
+                    console.warn('⚠️ 添加AI响应前会话ID已变化，从', currentSessionId, '变为', currentSession?.id)
+                    // 如果会话ID已变，尝试在当前会话中添加消息
+                    if (currentSession) {
+                      const updatedMessages = [...currentSession.messages, streamingMessage]
+                      const newUpdatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+                      
+                      setCurrentSession(newUpdatedSession)
+                      setChatSessions(prev => 
+                        prev.map(s => s.id === currentSession.id ? newUpdatedSession : s)
+                      )
+                    }
+                  } else {
+                    // 会话ID一致，正常添加消息
+                    const updatedMessages = [...updatedSession.messages, streamingMessage]
+                    updatedSession = { ...updatedSession, messages: updatedMessages, lastMessage: new Date() }
+                    
+                    setCurrentSession(updatedSession)
+                    setChatSessions(prev => 
+                      prev.map(s => s.id === updatedSession!.id ? updatedSession! : s)
+                    )
+                  }
                 }
               }
               
@@ -600,6 +660,10 @@ export default function ChatPage() {
   // 模拟流式响应效果
   const simulateStreamingResponse = async (fullResponse: string, messageToUpdate: Message) => {
     try {
+      // 保存当前会话ID，用于后续确认是否仍在同一会话中
+      const sessionIdAtStart = currentSession?.id
+      console.log('🔄 开始流式显示，会话ID:', sessionIdAtStart, '消息ID:', messageToUpdate.id)
+      
       const words = fullResponse.split(' ')
       let currentContent = ''
       
@@ -609,6 +673,31 @@ export default function ChatPage() {
         // 更新消息内容 - 减少状态更新频率，每5个单词更新一次
         if (currentSession && (i % 5 === 0 || i === words.length - 1)) {
           try {
+            // 确认当前会话ID是否与开始时一致
+            if (currentSession.id !== sessionIdAtStart) {
+              console.warn('⚠️ 会话ID已变化，从', sessionIdAtStart, '变为', currentSession.id)
+              // 如果会话已变，尝试在新会话中找到对应消息
+            }
+            
+            // 检查消息是否存在于当前会话中
+            const messageExists = currentSession.messages.some(msg => msg.id === messageToUpdate.id)
+            if (!messageExists) {
+              console.warn('⚠️ 消息ID不存在于当前会话中:', messageToUpdate.id)
+              // 如果消息不存在，将其添加到当前会话
+              const newMessage = { ...messageToUpdate, content: currentContent }
+              const updatedMessages = [...currentSession.messages, newMessage]
+              const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+              
+              setCurrentSession(updatedSession)
+              if (i === words.length - 1) {
+                setChatSessions(prev => 
+                  prev.map(s => s.id === currentSession.id ? updatedSession : s)
+                )
+              }
+              continue
+            }
+            
+            // 正常更新消息内容
             const updatedMessages = currentSession.messages.map(msg => 
               msg.id === messageToUpdate.id 
                 ? { ...msg, content: currentContent }
@@ -637,6 +726,12 @@ export default function ChatPage() {
         // 延迟1秒后执行保存，避免与UI渲染冲突
         setTimeout(async () => {
           try {
+            // 再次确认会话ID是否一致
+            if (currentSession?.id !== sessionIdAtStart) {
+              console.warn('⚠️ 自动保存时会话ID已变化，取消保存')
+              return
+            }
+            
             setSaveStatus('saving')
             console.log('💾 自动保存聊天记录到R2...')
             const saveResult = await autoSaveChatHistory(currentSession.messages, {
@@ -666,17 +761,33 @@ export default function ChatPage() {
       // 确保即使出错也能显示完整消息
       if (currentSession) {
         try {
-          const updatedMessages = currentSession.messages.map(msg => 
-            msg.id === messageToUpdate.id 
-              ? { ...msg, content: fullResponse }
-              : msg
-          )
-          const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+          // 检查消息是否存在于当前会话中
+          const messageExists = currentSession.messages.some(msg => msg.id === messageToUpdate.id)
           
-          setCurrentSession(updatedSession)
-          setChatSessions(prev => 
-            prev.map(s => s.id === currentSession.id ? updatedSession : s)
-          )
+          if (messageExists) {
+            // 如果消息存在，更新它
+            const updatedMessages = currentSession.messages.map(msg => 
+              msg.id === messageToUpdate.id 
+                ? { ...msg, content: fullResponse }
+                : msg
+            )
+            const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+            
+            setCurrentSession(updatedSession)
+            setChatSessions(prev => 
+              prev.map(s => s.id === currentSession.id ? updatedSession : s)
+            )
+          } else {
+            // 如果消息不存在，添加它
+            const newMessage = { ...messageToUpdate, content: fullResponse }
+            const updatedMessages = [...currentSession.messages, newMessage]
+            const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+            
+            setCurrentSession(updatedSession)
+            setChatSessions(prev => 
+              prev.map(s => s.id === currentSession.id ? updatedSession : s)
+            )
+          }
         } catch (finalUpdateError) {
           console.error('❌ 最终更新消息失败:', finalUpdateError)
         }
