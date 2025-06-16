@@ -316,51 +316,80 @@ export default function ChatPage() {
             if (data && typeof data === 'object') {
               console.log('✅ data是有效对象')
               
-              // 检查output字段
-              console.log('🔍 output存在:', 'output' in data)
-              console.log('🔍 output类型:', typeof data.output)
-              console.log('🔍 output内容:', data.output)
-              
-              // 直接处理output字段 - 简化逻辑
-              if (data.output !== null && data.output !== undefined) {
-                console.log('✅ 发现output字段，开始处理')
+              try {
+                // 检查output字段
+                console.log('🔍 output存在:', 'output' in data)
+                console.log('🔍 output类型:', typeof data.output)
+                console.log('🔍 output内容:', data.output)
                 
-                // 检查output是否为对象类型，如果是则尝试提取其中的文本内容
-                if (typeof data.output === 'object' && data.output !== null) {
-                  console.log('🔍 output是对象类型，尝试提取内容')
+                // 直接处理output字段 - 简化逻辑
+                if (data.output !== null && data.output !== undefined) {
+                  console.log('✅ 发现output字段，开始处理')
                   
-                  // 尝试从对象中提取文本内容
-                  if ('model_info' in data.output && 'output' in data.output) {
-                    // 处理特定格式的响应 {model_info: {...}, output: "文本内容", status: "success"}
-                    aiResponse = String(data.output.output).trim()
-                    console.log('✅ 从model_info/output格式提取的响应:', aiResponse)
-                  } else if (data.output.text) {
-                    aiResponse = String(data.output.text).trim()
-                    console.log('✅ 从text字段提取的响应:', aiResponse)
-                  } else if (data.output.response) {
-                    aiResponse = String(data.output.response).trim()
-                    console.log('✅ 从response字段提取的响应:', aiResponse)
-                  } else if (data.output.content) {
-                    aiResponse = String(data.output.content).trim()
-                    console.log('✅ 从content字段提取的响应:', aiResponse)
+                  // 检查output是否为对象类型，如果是则尝试提取其中的文本内容
+                  if (typeof data.output === 'object' && data.output !== null) {
+                    console.log('🔍 output是对象类型，尝试提取内容')
+                    
+                    // 尝试从对象中提取文本内容
+                    if ('model_info' in data.output && 'output' in data.output) {
+                      // 处理特定格式的响应 {model_info: {...}, output: "文本内容", status: "success"}
+                      aiResponse = String(data.output.output).trim()
+                      console.log('✅ 从model_info/output格式提取的响应:', aiResponse)
+                    } else if (data.output.text) {
+                      aiResponse = String(data.output.text).trim()
+                      console.log('✅ 从text字段提取的响应:', aiResponse)
+                    } else if (data.output.response) {
+                      aiResponse = String(data.output.response).trim()
+                      console.log('✅ 从response字段提取的响应:', aiResponse)
+                    } else if (data.output.content) {
+                      aiResponse = String(data.output.content).trim()
+                      console.log('✅ 从content字段提取的响应:', aiResponse)
+                    } else {
+                      // 如果没有找到合适的字段，使用JSON字符串
+                      const outputStr = JSON.stringify(data.output)
+                      console.log('⚠️ 未找到标准字段，使用JSON字符串:', outputStr)
+                      
+                      // 尝试从JSON字符串中提取可能的文本内容
+                      try {
+                        const outputObj = JSON.parse(outputStr)
+                        if (typeof outputObj === 'string') {
+                          aiResponse = outputObj
+                        } else if (outputObj && typeof outputObj === 'object') {
+                          // 尝试从嵌套对象中提取文本
+                          if (outputObj.text) aiResponse = String(outputObj.text)
+                          else if (outputObj.content) aiResponse = String(outputObj.content)
+                          else if (outputObj.message) aiResponse = String(outputObj.message)
+                          else if (outputObj.response) aiResponse = String(outputObj.response)
+                          else if (outputObj.result) aiResponse = String(outputObj.result)
+                          else if (outputObj.output) aiResponse = String(outputObj.output)
+                          else aiResponse = outputStr
+                        } else {
+                          aiResponse = outputStr
+                        }
+                      } catch (parseError) {
+                        console.error('⚠️ JSON解析失败，使用原始字符串:', parseError)
+                        aiResponse = outputStr
+                      }
+                    }
                   } else {
-                    // 如果没有找到合适的字段，使用JSON字符串
-                    aiResponse = JSON.stringify(data.output)
-                    console.log('⚠️ 未找到标准字段，使用JSON字符串:', aiResponse)
+                    // output不是对象，直接使用
+                    aiResponse = String(data.output).trim()
+                    console.log('✅ 直接使用非对象output:', aiResponse)
                   }
+                } else if (data.result) {
+                  console.log('⚠️ 没有output，尝试使用result字段')
+                  aiResponse = String(data.result).trim()
+                  console.log('📤 使用result:', aiResponse)
                 } else {
-                  // output不是对象，直接使用
-                  aiResponse = String(data.output).trim()
-                  console.log('✅ 直接使用非对象output:', aiResponse)
+                  console.log('❌ 没有找到output或result字段')
+                  console.log('🔍 可用字段:', Object.keys(data))
+                  aiResponse = '抱歉，服务器返回了无效的响应格式。😔'
                 }
-              } else if (data.result) {
-                console.log('⚠️ 没有output，尝试使用result字段')
-                aiResponse = String(data.result).trim()
-                console.log('📤 使用result:', aiResponse)
-              } else {
-                console.log('❌ 没有找到output或result字段')
-                console.log('🔍 可用字段:', Object.keys(data))
-                aiResponse = '抱歉，服务器返回了无效的响应格式。😔'
+              } catch (parseError) {
+                console.error('❌ 响应解析错误:', parseError)
+                // 尝试使用整个数据对象作为字符串
+                aiResponse = JSON.stringify(data)
+                console.log('⚠️ 使用整个数据对象作为字符串:', aiResponse)
               }
             } else {
               console.log('❌ data不是有效对象')
@@ -387,10 +416,28 @@ export default function ChatPage() {
             console.log('🎯 字符串长度:', aiResponse.length)
             
             if (aiResponse && streamingMessage) {
-              // 实现流式效果 - 逐字显示
-              await simulateStreamingResponse(aiResponse, streamingMessage)
-              setIsLoading(false)
-              return // 成功处理API响应，直接返回
+              try {
+                // 实现流式效果 - 逐字显示
+                await simulateStreamingResponse(aiResponse, streamingMessage)
+                setIsLoading(false)
+                return // 成功处理API响应，直接返回
+              } catch (streamError) {
+                console.error('❌ 流式响应错误:', streamError)
+                // 如果流式显示失败，直接设置完整消息
+                if (currentSession && streamingMessage) {
+                  const updatedMessages = currentSession.messages.map(msg => 
+                    msg.id === streamingMessage?.id 
+                      ? { ...msg, content: aiResponse }
+                      : msg
+                  )
+                  const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+                  
+                  setCurrentSession(updatedSession)
+                  setChatSessions(prev => 
+                    prev.map(s => s.id === currentSession.id ? updatedSession : s)
+                  )
+                }
+              }
             }
           } else {
             const errorText = await response.text()
@@ -488,54 +535,81 @@ export default function ChatPage() {
 
   // 模拟流式响应效果
   const simulateStreamingResponse = async (fullResponse: string, messageToUpdate: Message) => {
-    const words = fullResponse.split(' ')
-    let currentContent = ''
-    
-    for (let i = 0; i < words.length; i++) {
-      currentContent += (i > 0 ? ' ' : '') + words[i]
+    try {
+      const words = fullResponse.split(' ')
+      let currentContent = ''
       
-      // 更新消息内容
-      if (currentSession) {
-        const updatedMessages = currentSession.messages.map(msg => 
-          msg.id === messageToUpdate.id 
-            ? { ...msg, content: currentContent }
-            : msg
-        )
-        const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+      for (let i = 0; i < words.length; i++) {
+        currentContent += (i > 0 ? ' ' : '') + words[i]
         
-        setCurrentSession(updatedSession)
-        setChatSessions(prev => 
-          prev.map(s => s.id === currentSession.id ? updatedSession : s)
-        )
-      }
-      
-      // 控制流式速度
-      await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100))
-    }
-
-    // 完成后自动保存聊天记录
-    if (autoSave && currentSession && currentSession.messages.length >= 2) {
-      try {
-        setSaveStatus('saving')
-        console.log('💾 自动保存聊天记录到R2...')
-        const saveResult = await autoSaveChatHistory(currentSession.messages, {
-          model: selectedModel.id,
-          persona: 'default',
-          temperature: 0.7,
-          timestamp: new Date().toISOString()
-        })
-        
-        if (saveResult.success) {
-          console.log('✅ 聊天记录已保存到R2:', saveResult.chatId)
-          setLastSaveTime(new Date())
-          setSaveStatus('storage' in saveResult && saveResult.storage === 'local' ? 'local' : 'saved')
-        } else {
-          console.error('❌ 聊天记录保存失败:', 'error' in saveResult ? saveResult.error : 'Unknown error')
-          setSaveStatus('error')
+        // 更新消息内容
+        if (currentSession) {
+          try {
+            const updatedMessages = currentSession.messages.map(msg => 
+              msg.id === messageToUpdate.id 
+                ? { ...msg, content: currentContent }
+                : msg
+            )
+            const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+            
+            setCurrentSession(updatedSession)
+            setChatSessions(prev => 
+              prev.map(s => s.id === currentSession.id ? updatedSession : s)
+            )
+          } catch (updateError) {
+            console.error('❌ 更新消息内容失败:', updateError)
+          }
         }
-      } catch (error) {
-        console.error('❌ 自动保存异常:', error)
-        setSaveStatus('error')
+        
+        // 控制流式速度
+        await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100))
+      }
+
+      // 完成后自动保存聊天记录，但使用try-catch包装
+      if (autoSave && currentSession && currentSession.messages.length >= 2) {
+        try {
+          setSaveStatus('saving')
+          console.log('💾 自动保存聊天记录到R2...')
+          const saveResult = await autoSaveChatHistory(currentSession.messages, {
+            model: selectedModel.id,
+            persona: 'default',
+            temperature: 0.7,
+            timestamp: new Date().toISOString()
+          })
+          
+          if (saveResult.success) {
+            console.log('✅ 聊天记录已保存到R2:', saveResult.chatId)
+            setLastSaveTime(new Date())
+            setSaveStatus('storage' in saveResult && saveResult.storage === 'local' ? 'local' : 'saved')
+          } else {
+            console.error('❌ 聊天记录保存失败:', 'error' in saveResult ? saveResult.error : 'Unknown error')
+            setSaveStatus('error')
+          }
+        } catch (error) {
+          console.error('❌ 自动保存异常，但继续显示消息:', error)
+          setSaveStatus('error')
+          // 不要让保存错误影响消息显示
+        }
+      }
+    } catch (streamingError) {
+      console.error('❌ 流式响应处理错误:', streamingError)
+      // 确保即使出错也能显示完整消息
+      if (currentSession) {
+        try {
+          const updatedMessages = currentSession.messages.map(msg => 
+            msg.id === messageToUpdate.id 
+              ? { ...msg, content: fullResponse }
+              : msg
+          )
+          const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+          
+          setCurrentSession(updatedSession)
+          setChatSessions(prev => 
+            prev.map(s => s.id === currentSession.id ? updatedSession : s)
+          )
+        } catch (finalUpdateError) {
+          console.error('❌ 最终更新消息失败:', finalUpdateError)
+        }
       }
     }
   }
