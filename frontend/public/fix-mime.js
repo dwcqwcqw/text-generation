@@ -1,74 +1,74 @@
-// 这个脚本用于修复MIME类型问题
-console.log('MIME类型修复脚本已加载');
+// 强制修复MIME类型问题的脚本
+console.log('🔧 MIME类型修复脚本开始运行');
 
-// 动态加载JavaScript文件的函数
-function loadScript(url, callback) {
-  const script = document.createElement('script');
-  script.type = 'application/javascript';
-  script.src = url;
-  script.async = true;
-  script.onload = callback;
-  script.onerror = (error) => {
-    console.error('脚本加载失败:', url, error);
-    // 尝试重新加载
-    setTimeout(() => {
-      console.log('尝试重新加载脚本:', url);
-      loadScript(url, callback);
-    }, 1000);
+// 立即执行的函数，无需等待DOM加载
+(function() {
+  // 1. 修复现有的script标签
+  function fixExistingScripts() {
+    const scripts = document.querySelectorAll('script[src]:not([type="application/javascript"])');
+    console.log(`🔍 找到 ${scripts.length} 个需要修复的脚本标签`);
+    
+    scripts.forEach((script, index) => {
+      if (!script.src.includes('fix-mime.js')) {
+        console.log(`✅ 修复脚本 ${index + 1}: ${script.src}`);
+        script.setAttribute('type', 'application/javascript');
+      }
+    });
+  }
+
+  // 2. 重写document.createElement 来确保新创建的script标签有正确的type
+  const originalCreateElement = document.createElement.bind(document);
+  document.createElement = function(tagName, options) {
+    const element = originalCreateElement(tagName, options);
+    if (tagName.toLowerCase() === 'script' && !element.type) {
+      element.type = 'application/javascript';
+    }
+    return element;
   };
-  document.head.appendChild(script);
-}
 
-// 动态加载CSS文件的函数
-function loadCSS(url) {
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.type = 'text/css';
-  link.href = url;
-  link.onload = () => console.log('CSS加载成功:', url);
-  link.onerror = (error) => {
-    console.error('CSS加载失败:', url, error);
-  };
-  document.head.appendChild(link);
-}
+  // 3. 立即修复现有脚本
+  fixExistingScripts();
 
-// 检查并修复MIME类型
-function fixMimeTypes() {
-  console.log('开始修复MIME类型问题');
-  
-  // 获取所有脚本标签
-  const scripts = document.querySelectorAll('script[src]');
-  const loadedScripts = new Set();
-  
-  scripts.forEach(script => {
-    if (script.src && !script.src.includes('fix-mime.js') && !loadedScripts.has(script.src)) {
-      loadedScripts.add(script.src);
-      console.log('重新加载脚本:', script.src);
-      loadScript(script.src, () => {
-        console.log('脚本加载完成:', script.src);
+  // 4. 监听DOM变化，修复动态添加的脚本
+  if (typeof MutationObserver !== 'undefined') {
+    const observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        mutation.addedNodes.forEach(function(node) {
+          if (node.nodeType === 1) { // Element node
+            if (node.tagName === 'SCRIPT' && node.src && !node.type) {
+              console.log('🔧 修复动态添加的脚本:', node.src);
+              node.type = 'application/javascript';
+            }
+            // 也检查子元素
+            const scripts = node.querySelectorAll && node.querySelectorAll('script[src]:not([type])');
+            if (scripts) {
+              scripts.forEach(script => {
+                console.log('🔧 修复子脚本:', script.src);
+                script.type = 'application/javascript';
+              });
+            }
+          }
+        });
       });
-    }
-  });
-  
-  // 检查CSS文件
-  const cssLinks = document.querySelectorAll('link[rel="stylesheet"]');
-  cssLinks.forEach(link => {
-    if (link.href && !link.sheet) {
-      console.log('重新加载CSS:', link.href);
-      loadCSS(link.href);
-    }
-  });
-}
+    });
 
-// 在页面加载完成后执行
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', fixMimeTypes);
-} else {
-  fixMimeTypes();
-}
+    observer.observe(document, {
+      childList: true,
+      subtree: true
+    });
+  }
 
-// 也在window.onload时执行，确保所有资源都被处理
-window.addEventListener('load', () => {
-  console.log('页面完全加载，再次检查MIME类型');
-  setTimeout(fixMimeTypes, 500);
-}); 
+  // 5. 在DOM加载完成后再次检查
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(fixExistingScripts, 100);
+    });
+  }
+
+  // 6. 在窗口加载完成后最后检查一次
+  window.addEventListener('load', function() {
+    setTimeout(fixExistingScripts, 200);
+  });
+
+  console.log('✅ MIME类型修复脚本初始化完成');
+})(); 
