@@ -247,15 +247,34 @@ export default function ChatPage() {
           }
           
           // 准备对话历史 - 确保内容是字符串格式，过滤[object Object]
+          console.log('🗂️ 传入的原始历史记录:', history.map(msg => ({ 
+            id: msg.id, 
+            role: msg.role, 
+            content: msg.content,
+            contentType: typeof msg.content,
+            contentLength: msg.content?.length 
+          })))
+          
           const conversationHistory = history.map(msg => ({
             role: msg.role,
             content: typeof msg.content === 'string' ? msg.content : String(msg.content || '')
-          })).filter(msg => {
+          })).filter((msg, index) => {
             const content = msg.content.trim()
-            return content !== '' && content !== '[object Object]' && content !== 'undefined' && content !== 'null'
+            const isValid = content !== '' && content !== '[object Object]' && content !== 'undefined' && content !== 'null'
+            console.log(`🗂️ 过滤消息 ${index}:`, { 
+              role: msg.role, 
+              contentPreview: content.substring(0, 50),
+              contentLength: content.length,
+              isValid: isValid 
+            })
+            return isValid
           })
           
-          console.log('🗂️ 过滤后的对话历史:', conversationHistory)
+          console.log('🗂️ 过滤后的对话历史:', conversationHistory.map(msg => ({ 
+            role: msg.role, 
+            contentPreview: msg.content.substring(0, 50),
+            contentLength: msg.content.length 
+          })))
           
           // 根据选择的模型确定系统模版和模型路径
           let systemTemplate = 'default'
