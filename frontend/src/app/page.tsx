@@ -621,28 +621,40 @@ export default function ChatPage() {
       let currentContent = '';
       for (let i = 0; i < words.length; i++) {
         currentContent += (i > 0 ? ' ' : '') + words[i];
-        if (currentSession && (i % 2 === 0 || i === words.length - 1)) {
+        if (i % 2 === 0 || i === words.length - 1) {
           try {
-            if (currentSession.id !== sessionIdAtStart) {
-              console.warn('⚠️ 会话ID已变化，从', sessionIdAtStart, '变为', currentSession.id);
-            }
-            const messageExists = currentSession.messages.some(msg => msg.id === messageToUpdate.id);
-            if (!messageExists) {
-              console.warn('⚠️ 消息ID不存在于当前会话中:', messageToUpdate.id);
-              const newMessage = { ...messageToUpdate, content: currentContent };
-              const updatedMessages = [...currentSession.messages, newMessage];
-              const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() };
-              setCurrentSession(updatedSession);
-              if (i === words.length - 1) {
-                setChatSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s));
+            // 使用函数式状态更新确保获取最新状态
+            setCurrentSession(prevSession => {
+              if (!prevSession || prevSession.id !== sessionIdAtStart) {
+                console.warn('⚠️ 会话状态不匹配，跳过更新');
+                return prevSession;
               }
-              continue;
-            }
-            const updatedMessages = currentSession.messages.map(msg => msg.id === messageToUpdate.id ? { ...msg, content: currentContent } : msg);
-            const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() };
-            setCurrentSession(updatedSession);
+              
+              console.log('🔄 更新流式内容，当前消息数:', prevSession.messages.length, '目标ID:', messageToUpdate.id);
+              
+              const messageExists = prevSession.messages.some(msg => msg.id === messageToUpdate.id);
+              if (!messageExists) {
+                console.warn('⚠️ 消息ID不存在，添加新消息:', messageToUpdate.id);
+                const newMessage = { ...messageToUpdate, content: currentContent };
+                const updatedMessages = [...prevSession.messages, newMessage];
+                return { ...prevSession, messages: updatedMessages, lastMessage: new Date() };
+              }
+              
+              const updatedMessages = prevSession.messages.map(msg => 
+                msg.id === messageToUpdate.id ? { ...msg, content: currentContent } : msg
+              );
+              
+              console.log('🔄 更新后消息数:', updatedMessages.length);
+              return { ...prevSession, messages: updatedMessages, lastMessage: new Date() };
+            });
+            
+            // 只在最后一次更新chatSessions
             if (i === words.length - 1) {
-              setChatSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s));
+              setChatSessions(prev => prev.map(s => s.id === sessionIdAtStart ? 
+                { ...s, messages: s.messages.map(msg => 
+                  msg.id === messageToUpdate.id ? { ...msg, content: currentContent } : msg
+                ), lastMessage: new Date() } : s
+              ));
             }
           } catch (updateError) {
             console.error('❌ 更新消息内容失败:', updateError);
