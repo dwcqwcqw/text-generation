@@ -442,44 +442,7 @@ export default function ChatPage() {
               console.log('🎯 最终确认的AI响应 (字符串):', aiResponse)
               console.log('🎯 字符串长度:', aiResponse.length)
               
-              // 创建流式消息（如果尚未创建）
-              if (!streamingMessage) {
-                streamingMessage = {
-                  id: Date.now().toString(),
-                  content: '',
-                  role: 'assistant',
-                  timestamp: new Date(),
-                  model: selectedModel.id
-                }
-                
-                // 添加AI响应消息到当前会话
-                if (updatedSession) {
-                  // 再次确认会话ID是否一致
-                  if (currentSession?.id !== currentSessionId) {
-                    console.warn('⚠️ 添加AI响应前会话ID已变化，从', currentSessionId, '变为', currentSession?.id)
-                    // 如果会话ID已变，尝试在当前会话中添加消息
-                    if (currentSession) {
-                      const updatedMessages = [...currentSession.messages, streamingMessage]
-                      const newUpdatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
-                      
-                      setCurrentSession(newUpdatedSession)
-                      setChatSessions(prev => 
-                        prev.map(s => s.id === currentSession.id ? newUpdatedSession : s)
-                      )
-                    }
-                  } else {
-                    // 会话ID一致，正常添加消息
-                    const updatedMessages = [...updatedSession.messages, streamingMessage]
-                    updatedSession = { ...updatedSession, messages: updatedMessages, lastMessage: new Date() }
-                    
-                    setCurrentSession(updatedSession)
-                    setChatSessions(prev => 
-                      prev.map(s => s.id === updatedSession!.id ? updatedSession! : s)
-                    )
-                  }
-                }
-              }
-              
+              // streamingMessage已经在API调用前创建了，直接使用
               if (aiResponse && streamingMessage) {
                 try {
                   // 实现流式效果 - 逐字显示
@@ -591,26 +554,10 @@ export default function ChatPage() {
       
       const simulatedResponse = `${randomIntro}\n\n${randomBody}\n\n${randomEnding}`
 
-      // 如果没有创建流式消息，创建一个
+      // streamingMessage在API调用前已经创建，这里应该已经存在
       if (!streamingMessage) {
-        streamingMessage = {
-          id: Date.now().toString(),
-          content: '',
-          role: 'assistant',
-          timestamp: new Date(),
-          model: selectedModel.id
-        }
-
-        // 添加AI响应消息到当前会话
-        if (updatedSession) {
-          const updatedMessages = [...updatedSession.messages, streamingMessage]
-          updatedSession = { ...updatedSession, messages: updatedMessages, lastMessage: new Date() }
-          
-          setCurrentSession(updatedSession)
-          setChatSessions(prev => 
-            prev.map(s => s.id === updatedSession!.id ? updatedSession! : s)
-          )
-        }
+        console.error('❌ streamingMessage不存在，无法进行模拟回复')
+        throw new Error('streamingMessage not found for simulated response')
       }
 
       // 模拟流式响应
