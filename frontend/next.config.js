@@ -22,7 +22,14 @@ const nextConfig = {
   reactStrictMode: false,
   swcMinify: true,
   compress: true,
-  productionBrowserSourceMaps: false
+  productionBrowserSourceMaps: false,
+  // 确保静态资源正确处理
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  eslint: {
+    ignoreDuringBuilds: false,
+  }
 }
 
 module.exports = nextConfig 

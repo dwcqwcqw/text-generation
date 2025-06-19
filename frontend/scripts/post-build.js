@@ -24,27 +24,20 @@ if (fs.existsSync(publicRedirectsPath)) {
 }
 
 // 创建_headers文件，设置正确的MIME类型 - 使用Cloudflare Pages的正确格式
-const headersContent = `/_next/static/chunks/*.js
-  Content-Type: application/javascript
-  Cache-Control: public, max-age=31536000, immutable
-
-/_next/static/css/*.css
+const headersContent = `/_next/static/css/*.css
   Content-Type: text/css
-  Cache-Control: public, max-age=31536000, immutable
+
+/_next/static/chunks/*.js
+  Content-Type: application/javascript
+
+/_next/static/*.js
+  Content-Type: application/javascript
 
 /*.js
   Content-Type: application/javascript
 
 /*.css
   Content-Type: text/css
-
-/fix-mime.js
-  Content-Type: application/javascript
-  Cache-Control: public, max-age=3600
-
-/*
-  X-Content-Type-Options: nosniff
-  Access-Control-Allow-Origin: *
 `;
 
 fs.writeFileSync(path.join(outDir, '_headers'), headersContent);
@@ -53,8 +46,8 @@ console.log('✅ Created _headers file with proper MIME types');
 // 创建_routes.json文件，确保正确的路由处理
 const routesContent = `{
   "version": 1,
-  "include": ["/*"],
-  "exclude": []
+  "include": ["/", "/test/*", "/debug/*"],
+  "exclude": ["/_next/*", "/*.css", "/*.js", "/favicon.ico", "/fix-mime.js"]
 }`;
 
 fs.writeFileSync(path.join(outDir, '_routes.json'), routesContent);

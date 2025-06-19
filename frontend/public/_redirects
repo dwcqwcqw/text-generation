@@ -1,13 +1,13 @@
-# Static assets should be served directly, not redirected
-/_next/static/* /_next/static/:splat 200
-/_next/* /_next/:splat 200
-/favicon.ico /favicon.ico 200
-/*.css /:splat 200
-/*.js /:splat 200
-/fix-mime.js /fix-mime.js 200
+# Static assets must be served as-is, never redirected
+/_next/static/css/*.css 200!
+/_next/static/chunks/*.js 200!
+/_next/static/*.js 200!
+/_next/static/* 200!
+/_next/* 200!
+/favicon.ico 200!
 
-# API routes (if any) 
-/api/* /api/:splat 200
+# API routes (if any)
+/api/* 200
 
-# SPA Fallback for client-side routing (only for non-asset requests)
+# SPA fallback only for HTML pages
 /* /index.html 200 
