@@ -1222,30 +1222,8 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="p-6 space-y-6 max-w-4xl mx-auto w-full">
-              {/* 调试信息显示 */}
-              <div style={{ background: 'yellow', padding: '10px', margin: '10px 0' }}>
-                <strong>调试信息:</strong> 
-                <br />当前会话ID: {currentSession?.id}
-                <br />消息数量: {currentSession?.messages.length}
-                <br />消息列表长度: {Array.isArray(currentSession?.messages) ? currentSession.messages.length : 'Not Array'}
-              </div>
               {(() => {
-                console.log('🎨 渲染组件时的currentSession:', {
-                  id: currentSession?.id,
-                  messagesCount: currentSession?.messages.length,
-                  messages: currentSession?.messages.map(m => ({ 
-                    id: m.id, 
-                    role: m.role, 
-                    content: m.content.substring(0, 30),
-                    contentLength: m.content.length,
-                    timestampType: typeof m.timestamp,
-                    timestampValue: m.timestamp
-                  }))
-                })
-                // 强制显示完整的消息内容
-                if (currentSession?.messages.length > 0) {
-                  console.log('🎨 完整消息内容:', JSON.stringify(currentSession.messages, null, 2))
-                }
+                console.log('🎨 渲染消息数量:', currentSession?.messages.length)
                 return null
               })()}
               {currentSession.messages.map((message, index) => {
