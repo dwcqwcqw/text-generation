@@ -642,7 +642,16 @@ export default function ChatPage() {
       }
       
       // 延迟自动保存，避免与UI渲染冲突
+      console.log('💾 检查自动保存条件:', {
+        autoSave,
+        hasCurrentSession: !!currentSession,
+        messagesCount: currentSession?.messages.length,
+        sessionId: currentSession?.id,
+        sessionIdAtStart
+      })
+      
       if (autoSave && currentSession && currentSession.messages.length >= 2) {
+        console.log('💾 满足自动保存条件，将在2秒后保存')
         setTimeout(async () => {
           try {
             if (currentSession?.id !== sessionIdAtStart) {
@@ -650,7 +659,10 @@ export default function ChatPage() {
               return;
             }
             setSaveStatus('saving');
-            console.log('💾 自动保存聊天记录到R2...');
+            console.log('💾 开始自动保存聊天记录到R2...', {
+              messagesCount: currentSession.messages.length,
+              sessionId: currentSession.id
+            });
             const saveResult = await autoSaveChatHistory(currentSession.messages, {
               model: selectedModel.id,
               persona: 'default',
@@ -670,6 +682,8 @@ export default function ChatPage() {
             setSaveStatus('error');
           }
         }, 2000); // 延长到2秒
+      } else {
+        console.log('💾 不满足自动保存条件，跳过保存')
       }
     } catch (streamingError) {
       console.error('❌ 流式响应处理错误:', streamingError);
@@ -725,12 +739,16 @@ export default function ChatPage() {
     setCurrentSession(updatedSession)
     setChatSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s))
     
-    // 强制React重新渲染
-    await new Promise(resolve => setTimeout(resolve, 100))
+    // 强制React重新渲染，并等待状态更新完成
+    await new Promise(resolve => setTimeout(resolve, 200))
     
-    console.log('📝 状态更新后，检查当前会话消息数:', currentSession?.messages.length)
+    console.log('📝 状态更新后，重新检查当前会话:', {
+      id: updatedSession.id,
+      messagesCount: updatedSession.messages.length,
+      lastMessage: updatedSession.messages[updatedSession.messages.length - 1]
+    })
     
-    // 调用generateResponse生成AI响应
+    // 调用generateResponse生成AI响应，传递更新后的会话
     await generateResponse(userInput, updatedMessages)
   }
 
@@ -1183,22 +1201,36 @@ export default function ChatPage() {
           ) : (
             <div className="p-6 space-y-6 max-w-4xl mx-auto w-full">
               {(() => {
-                console.log('🎨 渲染消息列表:', currentSession?.messages.map(m => ({ 
-                  id: m.id, 
-                  role: m.role, 
-                  content: m.content.substring(0, 30),
-                  contentLength: m.content.length 
-                })))
+                console.log('🎨 渲染组件时的currentSession:', {
+                  id: currentSession?.id,
+                  messagesCount: currentSession?.messages.length,
+                  messages: currentSession?.messages.map(m => ({ 
+                    id: m.id, 
+                    role: m.role, 
+                    content: m.content.substring(0, 30),
+                    contentLength: m.content.length 
+                  }))
+                })
                 return null
               })()}
-              {currentSession.messages.map((message) => {
-                console.log('🎨 渲染单条消息:', { id: message.id, role: message.role, contentPreview: message.content.substring(0, 50) })
+              {currentSession.messages.map((message, index) => {
+                console.log(`🎨 渲染单条消息 ${index}:`, { 
+                  id: message.id, 
+                  role: message.role, 
+                  contentPreview: message.content.substring(0, 50),
+                  contentLength: message.content.length,
+                  timestamp: message.timestamp
+                })
                 return (
                 <div
                   key={message.id}
                   className={`flex gap-4 message-bubble ${
                     message.role === 'user' ? 'justify-end' : 'justify-start'
                   }`}
+                  style={{ 
+                    border: message.role === 'user' ? '2px solid red' : '1px solid blue',
+                    margin: '10px 0'
+                  }}
                 >
                   {message.role === 'assistant' && (
                     <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
