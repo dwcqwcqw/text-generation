@@ -222,14 +222,9 @@ def format_prompt(prompt: str, persona: str = "default", history: list = None) -
     if not prompt:
         prompt = "Hello"
     
-    # 根据人格设置系统提示词 - 添加表情和简洁回复要求
+    # 根据人格设置系统提示词 - 减少表情符号使用
     system_prompts = {
-        "default": "You are a helpful, intelligent AI assistant for general conversations. 回复尽量的言简意赅，并且灵活的使用各种表情符号来增加亲和力。Keep responses concise and use emojis appropriately.",
-        "creative": "You are a creative AI assistant specialized in creative writing, storytelling, and fiction. 回复尽量的言简意赅，并且灵活的使用各种表情符号。Be creative and expressive with emojis.",
-        "professional": "You are a professional AI assistant providing formal, structured responses for business and analysis. 回复尽量的言简意赅，适当使用表情符号。Maintain professionalism while being concise.",
-        "casual": "You are a friendly, relaxed AI assistant with a conversational style. 回复尽量的言简意赅，并且灵活的使用各种表情符号。Be casual and use lots of emojis!",
-        "technical": "You are a technical AI assistant with expertise in programming, technology, and engineering. 回复尽量的言简意赅，并且适当使用表情符号。Be precise and use relevant emojis.",
-        "chinese": "你是一个专业的中文AI助手，理解中文文化背景。回复尽量的言简意赅，并且灵活的使用各种表情符号来增加亲和力。"
+        "default": "You are a helpful, intelligent AI assistant for general conversations. 。"
     }
     
     system_prompt = system_prompts.get(persona, system_prompts["default"])
@@ -342,14 +337,14 @@ def generate_response(prompt: str, persona: str = "default", history: list = Non
             
             # 如果响应为空，返回默认消息
             if not response_text:
-                response_text = "我理解了您的问题，但目前无法提供具体回答。请尝试重新表述您的问题。😊"
+                response_text = "我理解了您的问题，但目前无法提供具体回答。请尝试重新表述您的问题。"
                 logger.warning("⚠️ 响应为空，使用默认消息")
             
             return response_text
         
     except Exception as e:
         logger.error(f"❌ 生成响应失败: {e}")
-        return f"抱歉，生成响应时出现错误: {str(e)} 😔"
+        return f"抱歉，生成响应时出现错误: {str(e)}"
 
 def handler(event):
     """RunPod处理函数 - 支持流式响应和对话历史"""
