@@ -196,9 +196,19 @@ export default function ChatPage() {
     // 保存当前会话ID，用于后续确认是否仍在同一会话中
     const currentSessionId = currentSession?.id
     console.log('🔄 开始生成回复，当前会话ID:', currentSessionId)
+    console.log('🔄 generateResponse收到的history长度:', history.length)
+    console.log('🔄 generateResponse收到的history:', history.map(m => ({ role: m.role, content: m.content.substring(0, 50) })))
 
-    // 使用传入的历史记录，不再添加用户消息（已在handleSendMessage中添加）
+    // 使用包含所有历史消息的最新会话状态
     let updatedSession = currentSession
+    
+    // 确保会话包含了所有历史消息
+    if (updatedSession && history.length > updatedSession.messages.length) {
+      console.log('🔄 更新会话以包含所有历史消息')
+      updatedSession = { ...updatedSession, messages: history }
+      setCurrentSession(updatedSession)
+      setChatSessions(prev => prev.map(s => s.id === updatedSession!.id ? updatedSession! : s))
+    }
     
     // 如果是第一条消息，更新会话标题
     if (currentSession && history.length === 1 && history[0].role === 'user') {
@@ -736,8 +746,20 @@ export default function ChatPage() {
     console.log('📝 更新后的消息列表:', updatedMessages.map(m => ({ id: m.id, role: m.role, content: m.content.substring(0, 50) })))
     
     // 立即更新状态，确保用户消息显示
+    console.log('📝 准备更新状态，updatedSession:', {
+      id: updatedSession.id,
+      messagesCount: updatedSession.messages.length,
+      messages: updatedSession.messages.map(m => ({ role: m.role, content: m.content.substring(0, 30) }))
+    })
+    
+    // 使用函数式更新确保状态一致性
     setCurrentSession(updatedSession)
-    setChatSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s))
+    setChatSessions(prev => {
+      console.log('📝 更新chatSessions，当前sessions:', prev.map(s => ({ id: s.id, messagesCount: s.messages.length })))
+      const newSessions = prev.map(s => s.id === currentSession.id ? updatedSession : s)
+      console.log('📝 更新后的sessions:', newSessions.map(s => ({ id: s.id, messagesCount: s.messages.length })))
+      return newSessions
+    })
     
     // 强制React重新渲染，并等待状态更新完成
     await new Promise(resolve => setTimeout(resolve, 200))
@@ -1227,10 +1249,6 @@ export default function ChatPage() {
                   className={`flex gap-4 message-bubble ${
                     message.role === 'user' ? 'justify-end' : 'justify-start'
                   }`}
-                  style={{ 
-                    border: message.role === 'user' ? '2px solid red' : '1px solid blue',
-                    margin: '10px 0'
-                  }}
                 >
                   {message.role === 'assistant' && (
                     <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
