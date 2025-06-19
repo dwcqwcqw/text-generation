@@ -470,17 +470,14 @@ export default function ChatPage() {
             } catch (responseError) {
               console.error('❌ 处理API响应时出错:', responseError)
               
-              // 确保即使出错也能显示一个回复
-              const errorMessage: Message = {
-                id: Date.now().toString(),
-                content: '抱歉，处理API响应时出错。请重试。😔',
-                role: 'assistant',
-                timestamp: new Date(),
-                model: selectedModel.id
-              }
-              
-              if (currentSession) {
-                const updatedMessages = [...currentSession.messages, errorMessage]
+              // 更新已存在的streamingMessage而不是创建新消息
+              if (currentSession && streamingMessage) {
+                const errorContent = '抱歉，处理API响应时出错。请重试。😔'
+                const updatedMessages = currentSession.messages.map(msg => 
+                  msg.id === streamingMessage?.id 
+                    ? { ...msg, content: errorContent }
+                    : msg
+                )
                 const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
                 
                 setCurrentSession(updatedSession)
@@ -493,17 +490,14 @@ export default function ChatPage() {
             const errorText = await response.text()
             console.error('❌ RunPod API错误:', response.status, errorText)
             
-            // 添加API错误消息
-            const errorMessage: Message = {
-              id: Date.now().toString(),
-              content: `抱歉，API请求失败 (${response.status}): ${errorText || '未知错误'}`,
-              role: 'assistant',
-              timestamp: new Date(),
-              model: selectedModel.id
-            }
-            
-            if (currentSession) {
-              const updatedMessages = [...currentSession.messages, errorMessage]
+            // 更新已存在的streamingMessage而不是创建新消息
+            if (currentSession && streamingMessage) {
+              const errorContent = `抱歉，API请求失败 (${response.status}): ${errorText || '未知错误'}`
+              const updatedMessages = currentSession.messages.map(msg => 
+                msg.id === streamingMessage?.id 
+                  ? { ...msg, content: errorContent }
+                  : msg
+              )
               const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
               
               setCurrentSession(updatedSession)
@@ -564,17 +558,17 @@ export default function ChatPage() {
       await simulateStreamingResponse(simulatedResponse, streamingMessage)
       
     } catch (error) {
-      console.error('💥 生成响应时出错:', error)
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        content: `抱歉，我遇到了一个错误：${error instanceof Error ? error.message : '未知错误'} 😔`,
-        role: 'assistant',
-        timestamp: new Date()
-      }
+      console.error('�� 生成响应时出错:', error)
       
-      if (currentSession) {
-        const updatedMessages = [...currentSession.messages, errorMessage]
-        const updatedSession = { ...currentSession, messages: updatedMessages }
+      // 更新已存在的streamingMessage而不是创建新消息
+      if (currentSession && streamingMessage) {
+        const errorContent = `抱歉，我遇到了一个错误：${error instanceof Error ? error.message : '未知错误'} 😔`
+        const updatedMessages = currentSession.messages.map(msg => 
+          msg.id === streamingMessage?.id 
+            ? { ...msg, content: errorContent }
+            : msg
+        )
+        const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
         
         setCurrentSession(updatedSession)
         setChatSessions(prev => 
@@ -685,6 +679,9 @@ export default function ChatPage() {
     const userInput = inputValue.trim()
     setInputValue('')
     
+    console.log('🚀 发送消息:', userInput)
+    console.log('🚀 当前会话:', currentSession?.id, '消息数:', currentSession?.messages.length)
+    
     // 添加用户消息到当前会话
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -693,9 +690,14 @@ export default function ChatPage() {
       timestamp: new Date()
     }
     
+    console.log('👤 创建用户消息:', userMessage)
+    
     // 更新会话，添加用户消息
     const updatedMessages = [...currentSession.messages, userMessage]
     const updatedSession = { ...currentSession, messages: updatedMessages, lastMessage: new Date() }
+    
+    console.log('📝 更新后消息数:', updatedMessages.length)
+    console.log('📝 更新后的消息列表:', updatedMessages.map(m => ({ id: m.id, role: m.role, content: m.content.substring(0, 50) })))
     
     setCurrentSession(updatedSession)
     setChatSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s))
@@ -985,7 +987,18 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="p-6 space-y-6 max-w-4xl mx-auto w-full">
-              {currentSession.messages.map((message) => (
+              {(() => {
+                console.log('🎨 渲染消息列表:', currentSession?.messages.map(m => ({ 
+                  id: m.id, 
+                  role: m.role, 
+                  content: m.content.substring(0, 30),
+                  contentLength: m.content.length 
+                })))
+                return null
+              })()}
+              {currentSession.messages.map((message) => {
+                console.log('🎨 渲染单条消息:', { id: message.id, role: message.role, contentPreview: message.content.substring(0, 50) })
+                return (
                 <div
                   key={message.id}
                   className={`flex gap-4 message-bubble ${
@@ -1008,9 +1021,11 @@ export default function ChatPage() {
                     {message.role === 'user' ? (
                       <p className="whitespace-pre-wrap">{message.content}</p>
                     ) : (
-                      <ReactMarkdown className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700">
-                        {message.content}
-                      </ReactMarkdown>
+                      <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700">
+                        <ReactMarkdown>
+                          {message.content.replace(/\\n/g, '\n')}
+                        </ReactMarkdown>
+                      </div>
                     )}
                     
                     <div className={`text-xs mt-3 ${
@@ -1029,7 +1044,7 @@ export default function ChatPage() {
                     </div>
                   )}
                 </div>
-              ))}
+              )})}
               
               {isLoading && (
                 <div className="flex gap-4">
