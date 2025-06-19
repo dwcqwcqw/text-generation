@@ -89,14 +89,14 @@ class ChatSaveRequest(BaseModel):
 class ChatRequest(BaseModel):
     prompt: str
     model: str = "gpt2"
-    max_length: int = 150
+    max_length: int = 1024
     temperature: float = 0.7
 
 class ChatRequestLegacy(BaseModel):
     message: str
     model: str = "L3.2-8X3B"
     temperature: Optional[float] = 0.7
-    max_tokens: Optional[int] = 512
+    max_tokens: Optional[int] = 2048
     persona: Optional[str] = "default"
 
 class ChatResponse(BaseModel):
@@ -112,7 +112,7 @@ class GenerateRequest(BaseModel):
     prompt: str
     model: str = "L3.2-8X3B"  
     temperature: Optional[float] = 0.7
-    max_tokens: Optional[int] = 512
+    max_tokens: Optional[int] = 2048
     persona: Optional[str] = "default"
 
 class ChatRecord(BaseModel):

@@ -52,7 +52,7 @@ const RUNPOD_API_KEY = 'your_actual_runpod_api_key_here'
   "input": {
     "model_path": "/runpod-volume/text_models/L3.2-8X3B.gguf",
     "prompt": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful, harmless, and honest assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n用户输入<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
-    "max_tokens": 150,
+    "max_tokens": 2048,
     "temperature": 0.7,
     "top_p": 0.9,
     "repeat_penalty": 1.05,

@@ -340,7 +340,7 @@ export default function ChatPage() {
               prompt: userInput,
               system_template: systemTemplate,
               history: conversationHistory,
-              max_tokens: 1000,
+              max_tokens: 2048,
               temperature: 0.7,
               model_path: selectedModel.parameters,  // 传递实际的模型文件路径
               stream: false  // 先关闭流式，确保基础功能正常
