@@ -43,8 +43,8 @@ logs/
 # Build outputs
 build/
 # dist/  # 临时注释，用于部署
-out/
-!frontend/out/  # 允许前端构建输出用于Cloudflare Pages部署
+# out/  # 临时注释，允许Cloudflare Pages构建
+frontend/out/  # 前端构建输出，用于Cloudflare Pages部署
 .next/
 *.egg-info/
 
@@ -69,8 +69,8 @@ coverage.xml
 
 # Production builds
 .next/
-*/out/
-!frontend/out/  # 允许前端构建输出用于Cloudflare Pages部署
+# */out/  # 临时注释，允许Cloudflare Pages构建
+# !frontend/out/  # 临时注释，允许前端构建输出用于Cloudflare Pages部署
 # dist/  # 临时注释，用于部署
 
 # Debug

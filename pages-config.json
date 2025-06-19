@@ -1,1 +1,11 @@
-{ "productionBranch": "main", "buildCommand": "cd frontend && npm install && npm run build", "outputDirectory": "frontend/out", "rootDirectory": "/", "environmentVariables": { "NODE_VERSION": "18", "NEXT_PUBLIC_API_URL": "https://api-text-generation.runpod.app", "NEXT_PUBLIC_R2_BUCKET": "text-generation" } }
+{
+  "productionBranch": "main",
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/out",
+  "rootDirectory": "/",
+  "environmentVariables": {
+    "NODE_VERSION": "18",
+    "NEXT_PUBLIC_API_URL": "https://api-text-generation.runpod.app",
+    "NEXT_PUBLIC_R2_BUCKET": "text-generation"
+  }
+}
