@@ -8,6 +8,7 @@ const R2_CONFIG = {
   accessKeyId: '5885b29961ce9fc2b593139d9de52f81',
   secretAccessKey: 'a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a27593d181',
   endpoint: 'https://c7c141ce43d175e60601edc46d904553.r2.cloudflarestorage.com',
+  publicUrl: 'https://pub-f314a707297b4748936925bba8dd4962.r2.dev',
   bucket: 'text-generation',
   region: 'auto'
 };
@@ -92,13 +93,14 @@ async function saveToR2Direct(chatRecord) {
 }
 
 /**
- * 保存聊天记录到R2 (通过后端API)
+ * 保存聊天记录到R2 (混合方案：后端API + 本地存储)
  */
 export async function saveChatToR2(messages, metadata = {}) {
+  const chatRecord = formatChatRecord(messages, metadata);
+  
+  // 优先尝试后端API
   try {
-    const chatRecord = formatChatRecord(messages, metadata);
-    
-    console.log('💾 通过后端API保存聊天记录到R2:', chatRecord.id);
+    console.log('💾 尝试通过后端API保存聊天记录到R2:', chatRecord.id);
     
     const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.saveChat}`, {
       method: 'POST',
@@ -114,31 +116,45 @@ export async function saveChatToR2(messages, metadata = {}) {
     
     if (response.ok) {
       const result = await response.json();
-      console.log('✅ 聊天记录保存成功:', chatRecord.id);
+      console.log('✅ 聊天记录保存成功 (后端API):', chatRecord.id);
       return {
         success: true,
         chatId: chatRecord.id,
-        result: result
+        result: result,
+        storage: 'r2'
       };
     } else {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
+      throw new Error(`后端API HTTP ${response.status}`);
     }
     
   } catch (error) {
-    console.error('❌ 保存聊天记录失败:', error);
+    console.log('⚠️ 后端API不可用，将使用本地存储备份:', error.message);
     
-    // 如果后端API不可用，尝试本地存储作为备份
+    // 后端API不可用，使用本地存储
     try {
-      const chatRecord = formatChatRecord(messages, metadata);
       const localKey = `chat_backup_${chatRecord.id}`;
       localStorage.setItem(localKey, JSON.stringify(chatRecord));
       console.log('📱 已保存到本地存储作为备份:', localKey);
       
+      // 同时保存到全局列表以便后续查询
+      const chatList = JSON.parse(localStorage.getItem('chat_list') || '[]');
+      const chatSummary = {
+        id: chatRecord.id,
+        title: chatRecord.title,
+        timestamp: chatRecord.timestamp,
+        messageCount: chatRecord.messages.length
+      };
+      
+      // 避免重复添加
+      if (!chatList.find(chat => chat.id === chatRecord.id)) {
+        chatList.unshift(chatSummary); // 添加到开头
+        localStorage.setItem('chat_list', JSON.stringify(chatList));
+      }
+      
       return {
         success: true,
         chatId: chatRecord.id,
-        storage: 'local_backup'
+        storage: 'local'
       };
     } catch (localError) {
       console.error('❌ 本地备份也失败:', localError);
@@ -151,87 +167,109 @@ export async function saveChatToR2(messages, metadata = {}) {
 }
 
 /**
- * 从R2加载聊天记录 (通过后端API)
+ * 从R2加载聊天记录 (混合方案：后端API + 本地存储)
  */
 export async function loadChatFromR2(chatId) {
+  // 优先尝试后端API
   try {
-    console.log('📥 通过后端API从R2加载聊天记录:', chatId);
+    console.log('📥 尝试通过后端API从R2加载聊天记录:', chatId);
     
     const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.loadChat}/${chatId}`);
     
     if (response.ok) {
       const result = await response.json();
-      console.log('✅ 聊天记录加载成功:', chatId);
+      console.log('✅ 聊天记录加载成功 (后端API):', chatId);
       return {
         success: true,
-        data: result.data
+        data: result.data,
+        storage: 'r2'
       };
     } else if (response.status === 404) {
-      // 尝试从本地存储加载备份
-      try {
-        const localKey = `chat_backup_${chatId}`;
-        const localData = localStorage.getItem(localKey);
-        if (localData) {
-          console.log('📱 从本地存储加载备份:', localKey);
-          return {
-            success: true,
-            data: JSON.parse(localData),
-            storage: 'local_backup'
-          };
-        }
-      } catch (localError) {
-        console.error('❌ 本地存储加载失败:', localError);
-      }
-      
-      return {
-        success: false,
-        error: '聊天记录不存在'
-      };
+      console.log('⚠️ 后端API中未找到记录，尝试本地存储');
+      throw new Error('Not found in API');
     } else {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(`后端API HTTP ${response.status}`);
     }
     
   } catch (error) {
-    console.error('❌ 加载聊天记录失败:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    console.log('⚠️ 后端API不可用，尝试从本地存储加载:', error.message);
+    
+    // 尝试从本地存储加载
+    try {
+      const localKey = `chat_backup_${chatId}`;
+      const localData = localStorage.getItem(localKey);
+      if (localData) {
+        console.log('📱 从本地存储加载成功:', localKey);
+        return {
+          success: true,
+          data: JSON.parse(localData),
+          storage: 'local'
+        };
+      } else {
+        return {
+          success: false,
+          error: '聊天记录不存在（本地存储中也未找到）'
+        };
+      }
+    } catch (localError) {
+      console.error('❌ 本地存储加载失败:', localError);
+      return {
+        success: false,
+        error: `加载失败: ${localError.message}`
+      };
+    }
   }
 }
 
 /**
- * 列出用户的聊天记录 (通过后端API)
+ * 列出用户的聊天记录 (混合方案：后端API + 本地存储)
  */
 export async function listUserChats(userId = 'anonymous', date = null) {
+  // 优先尝试后端API
   try {
     const dateParam = date || new Date().toISOString().split('T')[0];
     const url = `${API_CONFIG.baseUrl}/chat/history/${dateParam}`;
     
-    console.log('📋 获取聊天历史:', url);
+    console.log('📋 尝试通过后端API获取聊天历史:', url);
     
     const response = await fetch(url);
     
     if (response.ok) {
       const data = await response.json();
+      console.log('✅ 聊天历史获取成功 (后端API):', data.chats?.length || 0);
       return {
         success: true,
-        chats: data.chats || []
+        chats: data.chats || [],
+        storage: 'r2'
       };
     } else if (response.status === 404) {
-      return {
-        success: true,
-        chats: []
-      };
+      console.log('⚠️ 后端API中无历史记录，尝试本地存储');
+      throw new Error('No history in API');
     } else {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(`后端API HTTP ${response.status}`);
     }
     
   } catch (error) {
-    console.error('❌ 获取聊天列表失败:', error);
+    console.log('⚠️ 后端API不可用，从本地存储获取聊天历史:', error.message);
     
-    // 尝试从本地存储获取备份列表
+    // 从本地存储获取聊天历史
     try {
+      // 优先从chat_list获取（保存时已整理的列表）
+      const chatList = JSON.parse(localStorage.getItem('chat_list') || '[]');
+      if (chatList.length > 0) {
+        console.log('📱 从本地存储聊天列表获取:', chatList.length);
+        return {
+          success: true,
+          chats: chatList.map(chat => ({
+            ...chat,
+            message_count: chat.messageCount || 0,
+            storage: 'local'
+          })),
+          storage: 'local'
+        };
+      }
+      
+      // 如果没有整理的列表，扫描所有备份
       const backupChats = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -240,26 +278,31 @@ export async function listUserChats(userId = 'anonymous', date = null) {
             const data = JSON.parse(localStorage.getItem(key));
             backupChats.push({
               id: data.id,
-              title: data.title || (data.messages.find(msg => msg.role === 'user')?.content.substring(0, 30) + '...' || '备份对话'),
+              title: data.title || (data.messages.find(msg => msg.role === 'user')?.content.substring(0, 30) + '...' || '本地对话'),
               timestamp: data.timestamp,
               message_count: data.messages?.length || 0,
-              storage: 'local_backup'
+              storage: 'local'
             });
           } catch (e) {
-            // 忽略损坏的备份
+            console.warn('跳过损坏的备份:', key);
           }
         }
       }
       
+      const sortedChats = backupChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      console.log('📱 从本地存储备份获取:', sortedChats.length);
+      
       return {
         success: true,
-        chats: backupChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        chats: sortedChats,
+        storage: 'local'
       };
     } catch (localError) {
       console.error('❌ 本地存储查询失败:', localError);
       return {
         success: true,
-        chats: []
+        chats: [],
+        storage: 'none'
       };
     }
   }
