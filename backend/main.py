@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import httpx
 import boto3
 import json
@@ -9,10 +9,18 @@ import uuid
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
+import logging
+import asyncio
+from botocore.client import Config
+import uvicorn
 
 # 尝试加载.env文件，如果文件不存在也不会报错
 load_dotenv("config.env", override=True)
 load_dotenv(".env", override=False)
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Chat API", version="1.0.0")
 
@@ -32,6 +40,30 @@ CLOUDFLARE_ACCESS_KEY = os.getenv("CLOUDFLARE_ACCESS_KEY")
 CLOUDFLARE_SECRET_KEY = os.getenv("CLOUDFLARE_SECRET_KEY")
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://c7c141ce43d175e60601edc46d904553.r2.cloudflarestorage.com")
 R2_BUCKET = os.getenv("R2_BUCKET", "text-generation")
+
+# Cloudflare R2配置
+R2_CONFIG = {
+    'access_key_id': '5885b29961ce9fc2b593139d9de52f81',
+    'secret_access_key': 'a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a27593d181',
+    'endpoint_url': 'https://c7c141ce43d175e60601edc46d904553.r2.cloudflarestorage.com',
+    'bucket_name': 'text-generation',
+    'region': 'auto'
+}
+
+# 初始化R2客户端
+try:
+    r2_client = boto3.client(
+        's3',
+        endpoint_url=R2_CONFIG['endpoint_url'],
+        aws_access_key_id=R2_CONFIG['access_key_id'],
+        aws_secret_access_key=R2_CONFIG['secret_access_key'],
+        region_name=R2_CONFIG['region'],
+        config=Config(signature_version='s3v4')
+    )
+    logger.info("✅ R2客户端初始化成功")
+except Exception as e:
+    logger.error(f"❌ R2客户端初始化失败: {e}")
+    r2_client = None
 
 # Pydantic模型
 class Message(BaseModel):
@@ -83,6 +115,16 @@ class GenerateRequest(BaseModel):
     max_tokens: Optional[int] = 512
     persona: Optional[str] = "default"
 
+class ChatRecord(BaseModel):
+    chat_id: str
+    messages: List[Message]
+    metadata: Dict[str, Any] = {}
+
+class ChatHistoryResponse(BaseModel):
+    success: bool
+    chats: List[Dict[str, Any]] = []
+    error: Optional[str] = None
+
 # R2存储客户端
 def get_r2_client():
     try:
@@ -103,7 +145,12 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now()}
+    r2_status = "connected" if r2_client else "disconnected"
+    return {
+        "status": "healthy",
+        "r2_storage": r2_status,
+        "timestamp": datetime.now().isoformat()
+    }
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
@@ -274,7 +321,6 @@ async def chat_legacy(request: ChatRequestLegacy):
 async def save_simple_chat(prompt: str, response: str, model: str):
     """保存聊天记录到Cloudflare R2"""
     try:
-        r2_client = get_r2_client()
         if not r2_client:
             return
         
@@ -305,7 +351,6 @@ async def save_simple_chat(prompt: str, response: str, model: str):
 async def save_chat_to_r2(request: ChatRequestLegacy, response: str):
     """保存聊天记录到Cloudflare R2"""
     try:
-        r2_client = get_r2_client()
         if not r2_client:
             return
         
@@ -371,7 +416,6 @@ async def get_models():
 async def get_chat_history(date: str):
     """获取指定日期的聊天历史"""
     try:
-        r2_client = get_r2_client()
         if not r2_client:
             return {"chats": [], "message": "Storage not available"}
         
@@ -403,87 +447,175 @@ async def get_chat_history(date: str):
         return {"chats": [], "error": str(e)}
 
 @app.post("/chat/save")
-async def save_chat_record(request: ChatSaveRequest):
+async def save_chat(chat_record: ChatRecord):
     """保存聊天记录到R2"""
     try:
-        r2_client = get_r2_client()
         if not r2_client:
-            return {"success": False, "error": "R2 storage not available"}
+            raise HTTPException(status_code=500, detail="R2客户端未初始化")
         
-        # 准备聊天记录数据
-        chat_record = {
-            "id": request.chat_id,
+        # 生成文件路径
+        date_str = datetime.now().strftime('%Y-%m-%d')
+        file_key = f"chats/{date_str}/{chat_record.chat_id}.json"
+        
+        # 准备数据
+        chat_data = {
+            "id": chat_record.chat_id,
             "timestamp": datetime.now().isoformat(),
-            "messages": [msg.dict() for msg in request.messages],
-            "metadata": request.metadata or {}
+            "title": next((msg.content[:30] + "..." for msg in chat_record.messages if msg.role == "user"), "新对话"),
+            "messages": [msg.dict() for msg in chat_record.messages],
+            "metadata": chat_record.metadata
         }
         
-        # 使用日期作为文件夹结构
-        date_prefix = datetime.now().strftime("%Y/%m/%d")
-        key = f"chats/{date_prefix}/{request.chat_id}.json"
-        
-        r2_client.put_object(
-            Bucket=R2_BUCKET,
-            Key=key,
-            Body=json.dumps(chat_record, ensure_ascii=False, default=str),
+        # 保存到R2
+        response = r2_client.put_object(
+            Bucket=R2_CONFIG['bucket_name'],
+            Key=file_key,
+            Body=json.dumps(chat_data, ensure_ascii=False, indent=2),
             ContentType='application/json'
         )
         
-        print(f"Chat record saved to R2: {key}")
-        
+        logger.info(f"✅ 聊天记录保存成功: {file_key}")
         return {
             "success": True,
-            "chat_id": request.chat_id,
-            "storage_key": key,
-            "message": "Chat record saved successfully"
+            "chat_id": chat_record.chat_id,
+            "file_key": file_key,
+            "etag": response.get('ETag')
         }
         
     except Exception as e:
-        print(f"Save chat error: {e}")
-        return {"success": False, "error": str(e)}
+        logger.error(f"❌ 保存聊天记录失败: {e}")
+        raise HTTPException(status_code=500, detail=f"保存失败: {str(e)}")
 
 @app.get("/chat/load/{chat_id}")
-async def load_chat_record(chat_id: str):
+async def load_chat(chat_id: str):
     """从R2加载聊天记录"""
     try:
-        r2_client = get_r2_client()
         if not r2_client:
-            raise HTTPException(status_code=503, detail="R2 storage not available")
+            raise HTTPException(status_code=500, detail="R2客户端未初始化")
         
-        # 尝试从今天开始向前查找聊天记录
-        for days_back in range(30):  # 查找最近30天
-            date = (datetime.now() - timedelta(days=days_back)).strftime("%Y/%m/%d")
-            key = f"chats/{date}/{chat_id}.json"
+        # 尝试多个可能的日期路径
+        for days_back in range(30):  # 搜索最近30天
+            date_str = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
+            file_key = f"chats/{date_str}/{chat_id}.json"
             
             try:
-                file_response = r2_client.get_object(
-                    Bucket=R2_BUCKET,
-                    Key=key
+                response = r2_client.get_object(
+                    Bucket=R2_CONFIG['bucket_name'],
+                    Key=file_key
                 )
-                chat_data = json.loads(file_response['Body'].read())
-                print(f"Chat record loaded from R2: {key}")
-                return chat_data
+                
+                chat_data = json.loads(response['Body'].read().decode('utf-8'))
+                logger.info(f"✅ 聊天记录加载成功: {file_key}")
+                return {
+                    "success": True,
+                    "data": chat_data
+                }
                 
             except r2_client.exceptions.NoSuchKey:
                 continue
-            except Exception as e:
-                print(f"Error loading chat {key}: {e}")
-                continue
         
-        # 如果找不到聊天记录
-        raise HTTPException(status_code=404, detail="Chat record not found")
+        raise HTTPException(status_code=404, detail="聊天记录不存在")
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Load chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ 加载聊天记录失败: {e}")
+        raise HTTPException(status_code=500, detail=f"加载失败: {str(e)}")
+
+@app.get("/chat/history/{date_str}")
+async def list_chats(date_str: str):
+    """列出指定日期的聊天记录"""
+    try:
+        if not r2_client:
+            raise HTTPException(status_code=500, detail="R2客户端未初始化")
+        
+        # 格式化日期
+        formatted_date = date_str.replace('/', '-')
+        prefix = f"chats/{formatted_date}/"
+        
+        # 列出文件
+        response = r2_client.list_objects_v2(
+            Bucket=R2_CONFIG['bucket_name'],
+            Prefix=prefix
+        )
+        
+        chats = []
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                try:
+                    # 获取文件内容
+                    file_response = r2_client.get_object(
+                        Bucket=R2_CONFIG['bucket_name'],
+                        Key=obj['Key']
+                    )
+                    
+                    chat_data = json.loads(file_response['Body'].read().decode('utf-8'))
+                    
+                    chats.append({
+                        "id": chat_data.get("id"),
+                        "title": chat_data.get("title", "未知对话"),
+                        "timestamp": chat_data.get("timestamp"),
+                        "message_count": len(chat_data.get("messages", [])),
+                        "metadata": chat_data.get("metadata", {})
+                    })
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ 解析聊天文件失败 {obj['Key']}: {e}")
+                    continue
+        
+        logger.info(f"✅ 获取聊天历史成功: {len(chats)} 条记录")
+        return {
+            "success": True,
+            "chats": sorted(chats, key=lambda x: x.get("timestamp", ""), reverse=True)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 获取聊天历史失败: {e}")
+        return {
+            "success": True,
+            "chats": []
+        }
+
+@app.delete("/chat/delete/{chat_id}")
+async def delete_chat(chat_id: str):
+    """删除聊天记录"""
+    try:
+        if not r2_client:
+            raise HTTPException(status_code=500, detail="R2客户端未初始化")
+        
+        # 尝试多个可能的日期路径
+        deleted = False
+        for days_back in range(30):
+            date_str = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
+            file_key = f"chats/{date_str}/{chat_id}.json"
+            
+            try:
+                r2_client.delete_object(
+                    Bucket=R2_CONFIG['bucket_name'],
+                    Key=file_key
+                )
+                deleted = True
+                logger.info(f"✅ 聊天记录删除成功: {file_key}")
+                break
+                
+            except r2_client.exceptions.NoSuchKey:
+                continue
+        
+        if not deleted:
+            raise HTTPException(status_code=404, detail="聊天记录不存在")
+        
+        return {"success": True, "message": "聊天记录已删除"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 删除聊天记录失败: {e}")
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
 
 @app.get("/chat/list")
 async def list_recent_chats(days: int = 7):
     """列出最近的聊天记录"""
     try:
-        r2_client = get_r2_client()
         if not r2_client:
             return {"chats": [], "message": "Storage not available"}
         

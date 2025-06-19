@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Send, Bot, User, Search, Plus, ChevronDown, MessageSquare, RefreshCw, Settings, Save, Download } from 'lucide-react'
+import { Send, Bot, User, Search, Plus, ChevronDown, MessageSquare, RefreshCw, Settings, Save, Download, Trash2, History } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import { autoSaveChatHistory, exportChatAsJSON, loadChatFromR2, listUserChats } from '../../lib/r2-storage'
+import { autoSaveChatHistory, exportChatAsJSON, loadChatFromR2, listUserChats, deleteChatFromR2 } from '../../lib/r2-storage'
 
 // 强制更新版本 v2.0 - 确保只显示两个GGUF模型，清除所有缓存
 
@@ -62,6 +62,9 @@ export default function ChatPage() {
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null)
   const [saveStatus, setSaveStatus] = useState<'none' | 'saving' | 'saved' | 'local' | 'error'>('none')
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null)
+  const [historyChats, setHistoryChats] = useState<any[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 强制验证模型数量
@@ -558,7 +561,7 @@ export default function ChatPage() {
       await simulateStreamingResponse(simulatedResponse, streamingMessage)
       
     } catch (error) {
-      console.error('�� 生成响应时出错:', error)
+      console.error('❌ 生成响应时出错:', error)
       
       // 更新已存在的streamingMessage而不是创建新消息
       if (currentSession && streamingMessage) {
@@ -699,8 +702,14 @@ export default function ChatPage() {
     console.log('📝 更新后消息数:', updatedMessages.length)
     console.log('📝 更新后的消息列表:', updatedMessages.map(m => ({ id: m.id, role: m.role, content: m.content.substring(0, 50) })))
     
+    // 立即更新状态，确保用户消息显示
     setCurrentSession(updatedSession)
     setChatSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s))
+    
+    // 强制React重新渲染
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
+    console.log('📝 状态更新后，检查当前会话消息数:', currentSession?.messages.length)
     
     // 调用generateResponse生成AI响应
     await generateResponse(userInput, updatedMessages)
@@ -748,6 +757,95 @@ export default function ChatPage() {
     }
   }
 
+  const deleteChat = async (session: ChatSession) => {
+    try {
+      console.log('🗑️ 删除聊天记录:', session.id)
+      await deleteChatFromR2(session.id)
+      setChatSessions(prev => prev.filter(s => s.id !== session.id))
+      if (currentSession?.id === session.id) {
+        setCurrentSession(null)
+      }
+    } catch (error) {
+      console.error('❌ 删除聊天记录失败:', error)
+      alert('❌ 删除聊天记录失败')
+    }
+  }
+
+  const loadHistoryChats = async () => {
+    setIsLoadingHistory(true)
+    try {
+      console.log('📚 加载历史聊天记录...')
+      const result = await listUserChats()
+      if (result.success) {
+        setHistoryChats(result.chats)
+        console.log('✅ 历史聊天记录加载成功:', result.chats.length)
+      } else {
+        console.error('❌ 加载历史聊天记录失败')
+        setHistoryChats([])
+      }
+    } catch (error) {
+      console.error('❌ 加载历史聊天记录异常:', error)
+      setHistoryChats([])
+    } finally {
+      setIsLoadingHistory(false)
+    }
+  }
+
+  const loadHistoryChat = async (chatId: string) => {
+    try {
+      console.log('📥 加载历史聊天:', chatId)
+      const result = await loadChatFromR2(chatId)
+      if (result.success && result.data) {
+        const historyData = result.data
+        const session: ChatSession = {
+          id: historyData.id,
+          title: historyData.title || '历史对话',
+          messages: historyData.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          })),
+          createdAt: new Date(historyData.timestamp),
+          lastMessage: new Date(historyData.timestamp)
+        }
+        
+        setCurrentSession(session)
+        setChatSessions(prev => {
+          const existing = prev.find(s => s.id === session.id)
+          if (existing) {
+            return prev.map(s => s.id === session.id ? session : s)
+          } else {
+            return [session, ...prev]
+          }
+        })
+        setShowHistory(false)
+        console.log('✅ 历史聊天加载成功:', session.title)
+      } else {
+        console.error('❌ 加载历史聊天失败:', result.error)
+        alert('❌ 加载历史聊天失败')
+      }
+    } catch (error) {
+      console.error('❌ 加载历史聊天异常:', error)
+      alert('❌ 加载历史聊天异常')
+    }
+  }
+
+  const deleteHistoryChat = async (chatId: string) => {
+    try {
+      console.log('🗑️ 删除历史聊天:', chatId)
+      const result = await deleteChatFromR2(chatId)
+      if (result.success) {
+        setHistoryChats(prev => prev.filter(chat => chat.id !== chatId))
+        console.log('✅ 历史聊天删除成功')
+      } else {
+        console.error('❌ 删除历史聊天失败:', result.error)
+        alert('❌ 删除历史聊天失败')
+      }
+    } catch (error) {
+      console.error('❌ 删除历史聊天异常:', error)
+      alert('❌ 删除历史聊天异常')
+    }
+  }
+
   return (
     <div className="h-screen flex bg-white">
       {/* 左侧边栏 - 按照截图样式 */}
@@ -767,10 +865,23 @@ export default function ChatPage() {
         <div className="px-6 mb-6">
           <button
             onClick={createNewChat}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="w-full flex items-center gap-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium mb-3"
           >
             <Plus size={18} />
             New chat
+          </button>
+          
+          <button
+            onClick={() => {
+              setShowHistory(!showHistory)
+              if (!showHistory && historyChats.length === 0) {
+                loadHistoryChats()
+              }
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+          >
+            <History size={18} />
+            聊天历史 {historyChats.length > 0 && `(${historyChats.length})`}
           </button>
         </div>
 
@@ -790,38 +901,103 @@ export default function ChatPage() {
 
         {/* 对话列表 */}
         <div className="flex-1 overflow-y-auto px-6">
-          <h3 className="text-sm font-medium text-gray-600 mb-3">Your conversations</h3>
-          <div className="space-y-2">
-            {chatSessions.map((session) => (
-              <button
-                key={session.id}
-                onClick={() => {
-                  setCurrentSession(session)
-                }}
-                className={`w-full text-left p-3 rounded-lg transition-colors ${
-                  currentSession?.id === session.id
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium truncate">
-                      {session.title && session.title !== 'New Chat' ? session.title : '新对话'}
-                    </h3>
-                    <p className="text-sm opacity-75 truncate">
-                      {session.messages.length > 0 
-                        ? `${session.messages.length} 条消息` 
-                        : '开始对话...'}
-                    </p>
-                    <p className="text-xs opacity-60">
-                      {session.lastMessage.toLocaleDateString()}
-                    </p>
-                  </div>
+          {showHistory ? (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-600">历史聊天记录</h3>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  返回当前会话
+                </button>
+              </div>
+              
+              {isLoadingHistory ? (
+                <div className="text-center py-4">
+                  <div className="text-sm text-gray-500">加载中...</div>
                 </div>
-              </button>
-            ))}
-          </div>
+              ) : (
+                <div className="space-y-2">
+                  {historyChats.map((chat) => (
+                    <div
+                      key={chat.id}
+                      className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div 
+                          className="flex-1 cursor-pointer"
+                          onClick={() => loadHistoryChat(chat.id)}
+                        >
+                          <h4 className="font-medium text-sm text-gray-900 truncate">
+                            {chat.title}
+                          </h4>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {chat.message_count} 条消息
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {new Date(chat.timestamp).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (confirm('确定要删除这个聊天记录吗？')) {
+                              deleteHistoryChat(chat.id)
+                            }
+                          }}
+                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {historyChats.length === 0 && (
+                    <div className="text-center py-8">
+                      <div className="text-sm text-gray-500">暂无历史聊天记录</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <h3 className="text-sm font-medium text-gray-600 mb-3">Your conversations</h3>
+              <div className="space-y-2">
+                {chatSessions.map((session) => (
+                  <button
+                    key={session.id}
+                    onClick={() => {
+                      setCurrentSession(session)
+                    }}
+                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                      currentSession?.id === session.id
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium truncate">
+                          {session.title && session.title !== 'New Chat' ? session.title : '新对话'}
+                        </h3>
+                        <p className="text-sm opacity-75 truncate">
+                          {session.messages.length > 0 
+                            ? `${session.messages.length} 条消息` 
+                            : '开始对话...'}
+                        </p>
+                        <p className="text-xs opacity-60">
+                          {session.lastMessage.toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* 底部模型选择器 */}

@@ -3,7 +3,16 @@
  * 用于保存和管理聊天记录
  */
 
-// API配置
+// Cloudflare R2配置
+const R2_CONFIG = {
+  accessKeyId: '5885b29961ce9fc2b593139d9de52f81',
+  secretAccessKey: 'a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a27593d181',
+  endpoint: 'https://c7c141ce43d175e60601edc46d904553.r2.cloudflarestorage.com',
+  bucket: 'text-generation',
+  region: 'auto'
+};
+
+// API配置 (备用)
 const API_CONFIG = {
   baseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
   endpoints: {
@@ -18,26 +27,68 @@ const API_CONFIG = {
  * 生成聊天记录的唯一ID
  */
 function generateChatId() {
-  return `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substr(2, 9);
+  return `chat_${timestamp}_${random}`;
 }
 
 /**
  * 格式化聊天记录
  */
 function formatChatRecord(messages, metadata = {}) {
+  const chatId = generateChatId();
   return {
-    id: generateChatId(),
+    id: chatId,
     timestamp: new Date().toISOString(),
+    title: messages.find(msg => msg.role === 'user')?.content.substring(0, 30) + '...' || '新对话',
     messages: messages.map(msg => ({
       ...msg,
-      timestamp: msg.timestamp || new Date().toISOString()
+      timestamp: msg.timestamp instanceof Date ? msg.timestamp.toISOString() : msg.timestamp || new Date().toISOString()
     })),
     metadata: {
-      version: '1.0',
+      version: '2.0',
       model: metadata.model || 'unknown',
+      userId: metadata.userId || 'anonymous',
       ...metadata
     }
   };
+}
+
+/**
+ * 直接保存到Cloudflare R2
+ */
+async function saveToR2Direct(chatRecord) {
+  try {
+    // 使用现代的fetch API直接上传到R2
+    const fileName = `chats/${new Date().toISOString().split('T')[0]}/${chatRecord.id}.json`;
+    
+    // 创建AWS-style签名 (简化版本)
+    const url = `${R2_CONFIG.endpoint}/${R2_CONFIG.bucket}/${fileName}`;
+    
+    console.log('💾 直接保存到R2:', fileName);
+    
+    // 使用预签名URL或直接API调用
+    // 注意：在生产环境中应该通过后端API来处理，避免暴露密钥
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `AWS4-HMAC-SHA256 Credential=${R2_CONFIG.accessKeyId}/${new Date().toISOString().split('T')[0]}/${R2_CONFIG.region}/s3/aws4_request`,
+        // 实际的AWS签名会更复杂，这里简化处理
+      },
+      body: JSON.stringify(chatRecord)
+    });
+
+    if (response.ok) {
+      console.log('✅ R2存储成功:', fileName);
+      return { success: true, fileName };
+    } else {
+      throw new Error(`R2 upload failed: ${response.status}`);
+    }
+  } catch (error) {
+    console.error('❌ R2存储失败:', error);
+    throw error;
+  }
 }
 
 /**
@@ -109,11 +160,11 @@ export async function loadChatFromR2(chatId) {
     const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.loadChat}/${chatId}`);
     
     if (response.ok) {
-      const chatRecord = await response.json();
+      const result = await response.json();
       console.log('✅ 聊天记录加载成功:', chatId);
       return {
         success: true,
-        data: chatRecord
+        data: result.data
       };
     } else if (response.status === 404) {
       // 尝试从本地存储加载备份
@@ -154,8 +205,8 @@ export async function loadChatFromR2(chatId) {
  */
 export async function listUserChats(userId = 'anonymous', date = null) {
   try {
-    const dateParam = date || new Date().toISOString().split('T')[0].replace(/-/g, '/');
-    const url = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.listChats}/${dateParam}`;
+    const dateParam = date || new Date().toISOString().split('T')[0];
+    const url = `${API_CONFIG.baseUrl}/chat/history/${dateParam}`;
     
     console.log('📋 获取聊天历史:', url);
     
@@ -189,8 +240,9 @@ export async function listUserChats(userId = 'anonymous', date = null) {
             const data = JSON.parse(localStorage.getItem(key));
             backupChats.push({
               id: data.id,
-              title: data.messages.find(msg => msg.role === 'user')?.content.substring(0, 30) + '...' || '备份对话',
+              title: data.title || (data.messages.find(msg => msg.role === 'user')?.content.substring(0, 30) + '...' || '备份对话'),
               timestamp: data.timestamp,
+              message_count: data.messages?.length || 0,
               storage: 'local_backup'
             });
           } catch (e) {
@@ -199,15 +251,15 @@ export async function listUserChats(userId = 'anonymous', date = null) {
         }
       }
       
-      console.log('📱 从本地存储获取备份聊天列表:', backupChats.length);
       return {
         success: true,
-        chats: backupChats
+        chats: backupChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
       };
     } catch (localError) {
+      console.error('❌ 本地存储查询失败:', localError);
       return {
-        success: false,
-        error: error.message
+        success: true,
+        chats: []
       };
     }
   }
@@ -301,5 +353,45 @@ export function exportChatAsJSON(messages, filename = null) {
   } catch (error) {
     console.error('❌ 导出失败:', error);
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 删除聊天记录
+ */
+export async function deleteChatFromR2(chatId) {
+  try {
+    console.log('🗑️ 删除聊天记录:', chatId);
+    
+    const response = await fetch(`${API_CONFIG.baseUrl}/chat/delete/${chatId}`, {
+      method: 'DELETE'
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('✅ 聊天记录删除成功:', chatId);
+      
+      // 同时删除本地备份
+      try {
+        const localKey = `chat_backup_${chatId}`;
+        localStorage.removeItem(localKey);
+      } catch (e) {
+        // 忽略本地删除错误
+      }
+      
+      return {
+        success: true,
+        message: result.message
+      };
+    } else {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+  } catch (error) {
+    console.error('❌ 删除聊天记录失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
   }
 } 
