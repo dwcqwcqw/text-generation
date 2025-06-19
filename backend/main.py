@@ -36,8 +36,8 @@ app.add_middleware(
 # 配置
 RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY")
 RUNPOD_ENDPOINT = os.getenv("RUNPOD_ENDPOINT", "https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync")
-CLOUDFLARE_ACCESS_KEY = os.getenv("CLOUDFLARE_ACCESS_KEY")
-CLOUDFLARE_SECRET_KEY = os.getenv("CLOUDFLARE_SECRET_KEY")
+CLOUDFLARE_ACCESS_KEY = os.getenv("CLOUDFLARE_ACCESS_KEY", "5885b29961ce9fc2b593139d9de52f81")
+CLOUDFLARE_SECRET_KEY = os.getenv("CLOUDFLARE_SECRET_KEY", "a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a27593d181")
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://c7c141ce43d175e60601edc46d904553.r2.cloudflarestorage.com")
 R2_BUCKET = os.getenv("R2_BUCKET", "text-generation")
 

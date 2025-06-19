@@ -15,7 +15,7 @@ const R2_CONFIG = {
 
 // API配置 (备用)
 const API_CONFIG = {
-  baseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+  baseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000', // 本地开发时的默认地址
   endpoints: {
     saveChat: '/chat/save',
     loadChat: '/chat/load',
