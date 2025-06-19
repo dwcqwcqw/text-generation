@@ -65,6 +65,7 @@ export default function ChatPage() {
   const [historyChats, setHistoryChats] = useState<any[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [isInitializing, setIsInitializing] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 强制验证模型数量
@@ -80,14 +81,53 @@ export default function ChatPage() {
     }
   }, [selectedModel])
 
-  // 初始化：创建新对话
+  // 页面初始化：尝试加载最近的对话
   useEffect(() => {
-    if (!currentSession) {
-      console.log('🔄 初始化：创建新对话')
+    const initializePage = async () => {
+      setIsInitializing(true)
+      console.log('🔄 页面初始化：尝试加载最近对话')
+      
+      try {
+        // 尝试从R2加载最近的对话历史
+        const historyResult = await listUserChats()
+        if (historyResult.success && historyResult.chats.length > 0) {
+          console.log('✅ 发现历史对话，加载最近的对话:', historyResult.chats.length)
+          
+          // 加载最近的对话
+          const latestChat = historyResult.chats[0] // 第一个应该是最新的
+          const chatResult = await loadChatFromR2(latestChat.id)
+          
+          if (chatResult.success && chatResult.data) {
+            const historyData = chatResult.data
+            const session: ChatSession = {
+              id: historyData.id,
+              title: historyData.title || '历史对话',
+              messages: historyData.messages.map((msg: any) => ({
+                ...msg,
+                timestamp: new Date(msg.timestamp)
+              })),
+              createdAt: new Date(historyData.timestamp),
+              lastMessage: new Date(historyData.timestamp)
+            }
+            
+            console.log('✅ 成功恢复最近对话:', session.title, '消息数:', session.messages.length)
+            setCurrentSession(session)
+            setChatSessions([session])
+            setIsInitializing(false)
+            return
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ 加载历史对话失败，创建新对话:', error)
+      }
+      
+      // 如果没有历史对话或加载失败，创建新对话
+      console.log('🔄 创建新对话')
       createNewChat()
-    } else {
-      console.log('🔄 初始化：已有对话，跳过创建', currentSession.id)
+      setIsInitializing(false)
     }
+    
+    initializePage()
   }, [])
 
   // 添加调试日志，监控currentSession变化
@@ -1214,7 +1254,21 @@ export default function ChatPage() {
 
         {/* 消息区域 */}
         <div className="flex-1 overflow-y-auto bg-gray-50">
-          {!currentSession || currentSession.messages.length === 0 ? (
+          {isInitializing ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center max-w-md mx-auto px-6">
+                <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                  正在加载对话历史...
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  正在从云端恢复您的最近对话
+                </p>
+              </div>
+            </div>
+          ) : !currentSession || currentSession.messages.length === 0 ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-md mx-auto px-6">
                 <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mx-auto mb-6">
