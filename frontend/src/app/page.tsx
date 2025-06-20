@@ -1037,7 +1037,7 @@ export default function ChatPage() {
         input: {
           audio_data: base64Audio,
           format: 'webm',
-          model_path: "/runpod-volume/voice/whisper-large-v3-turbo",
+          model: "large-v3-turbo",
           task: "transcribe",
           language: "auto"
         }
