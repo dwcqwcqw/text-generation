@@ -1,7 +1,37 @@
-name = "text-generation-chat"
-compatibility_date = "2024-01-15"
+name = "text-generation"
+main = "cloudflare-api-worker.js"
+compatibility_date = "2024-06-15"
 
 [env.production.vars]
-NODE_VERSION = "18"
-NEXT_PUBLIC_API_URL = "https://api-text-generation.runpod.app"
-NEXT_PUBLIC_R2_BUCKET = "text-generation" 
+ENVIRONMENT = "production"
+RUNPOD_API_KEY = "rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb"
+MINIMAX_API_KEY = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJCRUkgTEkiLCJVc2VyTmFtZSI6IkJFSSBMSSIsIkFjY291bnQiOiIiLCJTdWJqZWN0SUQiOiIxOTI1MDI1MzAyNDAwOTk1NjQ0IiwiUGhvbmUiOiIiLCJHcm91cElEIjoiMTkyNTAyNTMwMjM5MjYwNzAzNiIsIlBhZ2VOYW1lIjoiIiwiTWFpbCI6ImJhaWxleWxpYmVpQGdtYWlsLmNvbSIsIkNyZWF0ZVRpbWUiOiIyMDI1LTA1LTIxIDEyOjIyOjI4IiwiVG9rZW5UeXBlIjoxLCJpc3MiOiJtaW5pbWF4In0.cMEP1g8YBLysihnD5RfmqtxGAGfR3XYxdXOAHurxoV5u92-ze8j5Iv1hc7O9qgFAoZyi2-eKRl6iRF3JM_IE1RQ6GXmfQnpr4a0VINu7c2GDW-x_4I-7CTHQTAmXfZOp6bVMbFvZqQDS9mzMexYDcFOghwJm1jFKhisU3J4996BqxC6R_u1J15yWkAb0Y5SX18hlYBEuO8MYPjAECSAcSthXIPxo4KQmd1LPuC2URnlhHBa6kvV0pZGp9tggSUlabyQaliCky8fxfOgyJc1YThQybg3iJ2VlYNnIhSj73SZ3pl6nB1unoiCsusAY0_mbzgcAiTd2rpKTh9xmUtcIxw"
+MINIMAX_GROUP_ID = "1925025302392607036"
+R2_ACCOUNT_ID = "c7c141ce43d175e60601edc46d904553"
+R2_ACCESS_KEY_ID = "5885b29961ce9fc2b593139d9de52f81"
+R2_SECRET_ACCESS_KEY = "a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a27593d181"
+# 阿里云配置 - 已通过 wrangler secret 设置在生产环境
+# ALIYUN_ACCESS_KEY_ID = "配置在 Worker 环境变量中"
+# ALIYUN_ACCESS_KEY_SECRET = "配置在 Worker 环境变量中"
+# ALIYUN_APP_KEY = "配置在 Worker 环境变量中"
+
+[[env.production.r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "text-generation"
+
+[env.development.vars]
+ENVIRONMENT = "development"
+RUNPOD_API_KEY = "rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb"
+MINIMAX_API_KEY = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJCRUkgTEkiLCJVc2VyTmFtZSI6IkJFSSBMSSIsIkFjY291bnQiOiIiLCJTdWJqZWN0SUQiOiIxOTI1MDI1MzAyNDAwOTk1NjQ0IiwiUGhvbmUiOiIiLCJHcm91cElEIjoiMTkyNTAyNTMwMjM5MjYwNzAzNiIsIlBhZ2VOYW1lIjoiIiwiTWFpbCI6ImJhaWxleWxpYmVpQGdtYWlsLmNvbSIsIkNyZWF0ZVRpbWUiOiIyMDI1LTA1LTIxIDEyOjIyOjI4IiwiVG9rZW5UeXBlIjoxLCJpc3MiOiJtaW5pbWF4In0.cMEP1g8YBLysihnD5RfmqtxGAGfR3XYxdXOAHurxoV5u92-ze8j5Iv1hc7O9qgFAoZyi2-eKRl6iRF3JM_IE1RQ6GXmfQnpr4a0VINu7c2URnlhHBa6kvV0pZGp9tggSUlabyQaliCky8fxfOgyJc1YThQybg3iJ2VlYNnIhSj73SZ3pl6nB1unoiCsusAY0_mbzgcAiTd2rpKTh9xmUtcIxw"
+MINIMAX_GROUP_ID = "1925025302392607036"
+R2_ACCOUNT_ID = "c7c141ce43d175e60601edc46d904553"
+R2_ACCESS_KEY_ID = "5885b29961ce9fc2b593139d9de52f81"
+R2_SECRET_ACCESS_KEY = "a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a27593d181"
+# 阿里云配置 - 开发环境注释掉，使用生产环境配置
+# ALIYUN_ACCESS_KEY_ID = "开发环境配置"
+# ALIYUN_ACCESS_KEY_SECRET = "开发环境配置"
+# ALIYUN_APP_KEY = "开发环境配置"
+
+[[env.development.r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "text-generation" 

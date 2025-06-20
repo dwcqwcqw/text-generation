@@ -99,23 +99,22 @@ class AliyunNLSClient {
       enable_words: enableWords
     };
 
-    // 生成签名参数
-    const signedParams = await this.signer.generateSignedParams('SubmitTask', {});
+    // 生成签名参数，包含 Task 参数用于签名计算
+    const signedParams = await this.signer.generateSignedParams('SubmitTask', {
+      Task: JSON.stringify(task)
+    });
     
     // 构造查询字符串
     const queryString = new URLSearchParams(signedParams).toString();
     const url = `${this.endpoint}/?${queryString}`;
 
-    // 构造 form data
-    const formData = new URLSearchParams();
-    formData.append('Task', JSON.stringify(task));
-
-    const response = await fetch(url, {
+    // 使用 POST 方法，Task 参数已包含在签名中
+    const response = await fetch(this.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: formData.toString()
+      body: queryString
     });
 
     if (!response.ok) {
@@ -601,7 +600,7 @@ export default {
           const body = await request.json();
           const { action, fileLink, taskId } = body;
           
-          // 从环境变量获取阿里云配置
+          // 从环境变量获取阿里云配置（支持 secret 和 env 变量）
           const accessKeyId = env.ALIYUN_ACCESS_KEY_ID;
           const accessKeySecret = env.ALIYUN_ACCESS_KEY_SECRET;
           const appKey = env.ALIYUN_APP_KEY;
