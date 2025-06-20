@@ -5,12 +5,12 @@
 
 // Cloudflare R2配置
 const R2_CONFIG = {
+  accountId: 'c7c141ce43d175e60601edc46d904553',
   accessKeyId: '5885b29961ce9fc2b593139d9de52f81',
   secretAccessKey: 'a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a27593d181',
-  endpoint: 'https://c7c141ce43d175e60601edc46d904553.r2.cloudflarestorage.com',
-  publicUrl: 'https://pub-f314a707297b4748936925bba8dd4962.r2.dev',
-  bucket: 'text-generation',
-  region: 'auto'
+  bucketName: 'text-generation',
+  endpoint: `https://c7c141ce43d175e60601edc46d904553.r2.cloudflarestorage.com`,
+  publicUrl: 'https://pub-f314a707297b4748936925bba8dd4962.r2.dev'
 };
 
 // API配置 (备用)
@@ -23,6 +23,85 @@ const API_CONFIG = {
     healthCheck: '/health'
   }
 };
+
+// Cloudflare R2 存储工具库
+import crypto from 'crypto';
+
+// 生成 AWS S3 兼容的签名
+function generateSignature(method, path, headers, timestamp) {
+  const stringToSign = [
+    method,
+    '', // Content-MD5 (optional)
+    headers['Content-Type'] || '',
+    timestamp,
+    path
+  ].join('\n');
+  
+  return crypto
+    .createHmac('sha1', R2_CONFIG.secretAccessKey)
+    .update(stringToSign)
+    .digest('base64');
+}
+
+// 上传文件到 R2
+export async function uploadToR2(file, fileName, contentType = 'audio/mp3') {
+  const path = `/${R2_CONFIG.bucketName}/${fileName}`;
+  const timestamp = new Date().toUTCString();
+  
+  const headers = {
+    'Content-Type': contentType,
+    'Content-Length': file.size.toString(),
+    'x-amz-date': timestamp
+  };
+  
+  const signature = generateSignature('PUT', path, headers, timestamp);
+  
+  const uploadHeaders = {
+    ...headers,
+    'Authorization': `AWS ${R2_CONFIG.accessKeyId}:${signature}`
+  };
+  
+  try {
+    const response = await fetch(`${R2_CONFIG.endpoint}${path}`, {
+      method: 'PUT',
+      headers: uploadHeaders,
+      body: file
+    });
+    
+    if (response.ok) {
+      return `${R2_CONFIG.publicUrl}/${fileName}`;
+    } else {
+      throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error('R2 上传失败:', error);
+    throw error;
+  }
+}
+
+// 检查文件是否存在
+export async function checkFileExists(fileName) {
+  const publicUrl = `${R2_CONFIG.publicUrl}/${fileName}`;
+  
+  try {
+    const response = await fetch(publicUrl, { method: 'HEAD' });
+    return response.ok;
+  } catch (error) {
+    console.error('检查文件存在性失败:', error);
+    return false;
+  }
+}
+
+// 生成缓存键
+export function generateCacheKey(text, prefix = 'tts') {
+  const hash = btoa(text).replace(/[+/=]/g, '').substring(0, 32);
+  return `${prefix}_${hash}.mp3`;
+}
+
+// 获取公共URL
+export function getPublicUrl(fileName) {
+  return `${R2_CONFIG.publicUrl}/${fileName}`;
+}
 
 /**
  * 生成聊天记录的唯一ID
@@ -64,7 +143,7 @@ async function saveToR2Direct(chatRecord) {
     const fileName = `chats/${new Date().toISOString().split('T')[0]}/${chatRecord.id}.json`;
     
     // 创建AWS-style签名 (简化版本)
-    const url = `${R2_CONFIG.endpoint}/${R2_CONFIG.bucket}/${fileName}`;
+    const url = `${R2_CONFIG.endpoint}/${R2_CONFIG.bucketName}/${fileName}`;
     
     console.log('💾 直接保存到R2:', fileName);
     

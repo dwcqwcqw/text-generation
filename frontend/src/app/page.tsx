@@ -1018,67 +1018,121 @@ export default function ChatPage() {
     try {
       console.log('🎤 处理语音输入，大小:', audioBlob.size);
       
-      // 转换为base64
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
-      const base64Audio = btoa(binaryString);
+      // 首先将录音保存到 R2
+      const audioFileName = `voice_input_${Date.now()}.webm`;
+      let audioUrl: string;
       
-      // 直接调用 RunPod Whisper API
-      const RUNPOD_API_KEY = process.env.NEXT_PUBLIC_RUNPOD_API_KEY;
-      const RUNPOD_ENDPOINT = `https://api.runpod.ai/v2/${process.env.NEXT_PUBLIC_RUNPOD_ENDPOINT_ID || '4cx6jtjdx6hdhr'}/runsync`;
-      
-      if (!RUNPOD_API_KEY) {
-        alert('语音识别服务未配置，请联系管理员');
+      try {
+        console.log('📤 上传语音文件到 R2...');
+        await uploadAudioToR2(audioBlob, audioFileName);
+        audioUrl = `https://pub-f314a707297b4748936925bba8dd4962.r2.dev/${audioFileName}`;
+        console.log('✅ 语音文件已上传:', audioUrl);
+      } catch (uploadError) {
+        console.error('❌ R2 上传失败:', uploadError);
+        alert('语音文件上传失败，请重试');
         return;
       }
       
-      const runpodPayload = {
-        input: {
-          audio_data: base64Audio,
-          format: 'webm',
-          model_path: "/runpod-volume/voice/whisper-large-v3-turbo",
-          task: "transcribe",
-          language: "auto"
-        }
+      // 调用阿里云录音文件识别 API
+      console.log('🚀 调用阿里云语音识别...');
+      
+      const aliyunPayload = {
+        accessKeyId: process.env.NEXT_PUBLIC_ALIYUN_ACCESS_KEY_ID,
+        accessKeySecret: process.env.NEXT_PUBLIC_ALIYUN_ACCESS_KEY_SECRET,
+        appKey: process.env.NEXT_PUBLIC_ALIYUN_APP_KEY,
+        fileLink: audioUrl,
+        version: '4.0',
+        enableWords: false
       };
       
-      console.log('🚀 直接调用 RunPod Whisper API...');
-      const response = await fetch(RUNPOD_ENDPOINT, {
+      // 验证必要的环境变量
+      if (!aliyunPayload.accessKeyId || !aliyunPayload.accessKeySecret || !aliyunPayload.appKey) {
+        throw new Error('阿里云 ASR 配置缺失，请设置环境变量');
+      }
+      
+      // 提交识别任务
+      const submitResponse = await fetch('/api/aliyun-asr', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${RUNPOD_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(runpodPayload),
+        body: JSON.stringify({
+          action: 'submit',
+          ...aliyunPayload
+        }),
       });
       
-      const result = await response.json();
-      console.log('📝 RunPod 语音转文字结果:', result);
+      if (!submitResponse.ok) {
+        throw new Error(`提交任务失败: ${submitResponse.status}`);
+      }
       
-      if (result.status === 'COMPLETED') {
-        let transcription = '';
-        if (typeof result.output === 'string') {
-          transcription = result.output;
-        } else if (result.output && typeof result.output === 'object') {
-          transcription = result.output.text || result.output.transcription || '';
+      const submitResult = await submitResponse.json();
+      console.log('📝 阿里云任务提交结果:', submitResult);
+      
+      if (submitResult.StatusText !== 'SUCCESS') {
+        throw new Error(`任务提交失败: ${submitResult.StatusText}`);
+      }
+      
+      const taskId = submitResult.TaskId;
+      console.log('⏳ 开始轮询任务状态, TaskID:', taskId);
+      
+      // 轮询查询识别结果
+      let pollCount = 0;
+      const maxPolls = 30; // 最多轮询30次 (5分钟)
+      
+      while (pollCount < maxPolls) {
+        await new Promise(resolve => setTimeout(resolve, 10000)); // 等待10秒
+        pollCount++;
+        
+        console.log(`🔄 第${pollCount}次查询任务状态...`);
+        
+        const queryResponse = await fetch('/api/aliyun-asr', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'query',
+            accessKeyId: aliyunPayload.accessKeyId,
+            accessKeySecret: aliyunPayload.accessKeySecret,
+            taskId: taskId
+          }),
+        });
+        
+        if (!queryResponse.ok) {
+          throw new Error(`查询任务失败: ${queryResponse.status}`);
         }
         
-        if (transcription) {
-          // 将转录文本设置到输入框
-          setInputValue(transcription.trim());
-          console.log('✅ 语音转文字成功:', transcription);
+        const queryResult = await queryResponse.json();
+        console.log('📊 任务状态查询结果:', queryResult);
+        
+        const statusText = queryResult.StatusText;
+        
+        if (statusText === 'SUCCESS') {
+          console.log('✅ 语音识别成功!');
+          const transcription = queryResult.Result;
+          setInputValue(transcription);
+          
+          // 清理临时音频文件（可选）
+          console.log('🗑️ 识别完成，可以清理临时文件:', audioFileName);
+          break;
+          
+        } else if (statusText === 'RUNNING' || statusText === 'QUEUEING') {
+          console.log(`⏳ 任务仍在处理中... (${statusText})`);
+          continue;
+          
         } else {
-          console.error('❌ 未检测到语音内容');
-          alert('未检测到语音内容，请重试');
+          throw new Error(`任务处理失败: ${statusText}`);
         }
-      } else {
-        console.error('❌ 语音转文字失败:', result.error || 'RunPod API 错误');
-        alert(result.error || '语音识别失败，请重试');
       }
+      
+      if (pollCount >= maxPolls) {
+        throw new Error('语音识别超时，请重试');
+      }
+      
     } catch (error) {
       console.error('❌ 语音处理异常:', error);
-      alert('语音处理失败，请检查网络连接');
+      alert(`语音识别失败: ${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setIsProcessingVoice(false);
     }
@@ -1095,7 +1149,40 @@ export default function ChatPage() {
         currentAudio.currentTime = 0;
       }
       
-      // 直接调用 MiniMax TTS API
+      // 生成文本的哈希值作为缓存键
+      const textHash = btoa(text).replace(/[+/=]/g, '').substring(0, 32);
+      const cacheKey = `tts_${textHash}.mp3`;
+      const r2PublicUrl = `https://pub-f314a707297b4748936925bba8dd4962.r2.dev/${cacheKey}`;
+      
+      console.log('🔍 检查缓存:', r2PublicUrl);
+      
+      // 首先检查 R2 中是否已有缓存的音频文件
+      try {
+        const cacheResponse = await fetch(r2PublicUrl, { method: 'HEAD' });
+        if (cacheResponse.ok) {
+          console.log('✅ 发现缓存音频，直接使用:', r2PublicUrl);
+          const audio = new Audio(r2PublicUrl);
+          setCurrentAudio(audio);
+          
+          audio.onended = () => {
+            setIsPlayingAudio(false);
+          };
+          
+          audio.onerror = (error) => {
+            console.error('❌ 缓存音频播放失败:', error);
+            setIsPlayingAudio(false);
+          };
+          
+          await audio.play();
+          console.log('✅ 开始播放缓存语音');
+          return;
+        }
+      } catch (error) {
+        console.log('⚠️ 缓存检查失败，继续生成新音频:', error);
+      }
+      
+      // 如果没有缓存，调用 MiniMax TTS API 生成新音频
+      console.log('🚀 生成新音频...');
       const MINIMAX_API_KEY = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJCRUkgTEkiLCJVc2VyTmFtZSI6IkJFSSBMSSIsIkFjY291bnQiOiIiLCJTdWJqZWN0SUQiOiIxOTI1MDI1MzAyNDAwOTk1NjQ0IiwiUGhvbmUiOiIiLCJHcm91cElEIjoiMTkyNTAyNTMwMjM5MjYwNzAzNiIsIlBhZ2VOYW1lIjoiIiwiTWFpbCI6ImJhaWxleWxpYmVpQGdtYWlsLmNvbSIsIkNyZWF0ZVRpbWUiOiIyMDI1LTA1LTIxIDEyOjIyOjI4IiwiVG9rZW5UeXBlIjoxLCJpc3MiOiJtaW5pbWF4In0.cMEP1g8YBLysihnD5RfmqtxGAGfR3XYxdXOAHurxoV5u92-ze8j5Iv1hc7O9qgFAoZyi2-eKRl6iRF3JM_IE1RQ6GXmfQnpr4a0VINu7c2GDW-x_4I-7CTHQTAmXfZOp6bVMbFvZqQDS9mzMexYDcFOghwJm1jFKhisU3J4996BqxC6R_u1J15yWkAb0Y5SX18hlYBEuO8MYPjAECSAcSthXIPxo4KQmd1LPuC2URnlhHBa6kvV0pZGp9tggSUlabyQaliCky8fxfOgyJc1YThQybg3iJ2VlYNnIhSj73SZ3pl6nB1unoiCsusAY0_mbzgcAiTd2rpKTh9xmUtcIxw';
       const MINIMAX_GROUP_ID = '1925025302392607036';
       const minimaxUrl = `https://api.minimax.io/v1/t2a_v2?GroupId=${MINIMAX_GROUP_ID}`;
@@ -1118,7 +1205,6 @@ export default function ChatPage() {
         }
       };
       
-      console.log('🚀 直接调用 MiniMax TTS API...');
       const response = await fetch(minimaxUrl, {
         method: 'POST',
         headers: {
@@ -1136,8 +1222,18 @@ export default function ChatPage() {
         const hexAudio = result.data.audio;
         const audioBytes = new Uint8Array(hexAudio.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
         const audioBlob = new Blob([audioBytes], { type: 'audio/mp3' });
-        const audioUrl = URL.createObjectURL(audioBlob);
         
+        // 上传到 R2 缓存
+        try {
+          console.log('📤 上传音频到 R2 缓存...');
+          await uploadAudioToR2(audioBlob, cacheKey);
+          console.log('✅ 音频已缓存到 R2');
+        } catch (uploadError) {
+          console.warn('⚠️ R2 上传失败，但继续播放:', uploadError);
+        }
+        
+        // 播放音频
+        const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
         setCurrentAudio(audio);
         
@@ -1153,7 +1249,7 @@ export default function ChatPage() {
         };
         
         await audio.play();
-        console.log('✅ 开始播放语音');
+        console.log('✅ 开始播放新生成的语音');
       } else {
         console.error('❌ 文字转语音失败:', result);
         alert('语音合成失败，请重试');
@@ -1163,6 +1259,35 @@ export default function ChatPage() {
       console.error('❌ 文字转语音异常:', error);
       alert('语音合成失败，请检查网络连接');
       setIsPlayingAudio(false);
+    }
+  };
+
+  // R2 上传函数
+  const uploadAudioToR2 = async (audioBlob: Blob, fileName: string) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', audioBlob, fileName);
+      formData.append('fileName', fileName);
+      
+      console.log('📤 通过 API 上传文件到 R2:', fileName, '大小:', audioBlob.size);
+      
+      const response = await fetch('/api/r2-upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '上传失败');
+      }
+      
+      const result = await response.json();
+      console.log('✅ R2 上传成功:', result.url);
+      return result.url;
+      
+    } catch (error) {
+      console.error('❌ R2 上传失败:', error);
+      throw new Error(`R2 上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
   };
 
