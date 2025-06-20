@@ -1025,7 +1025,11 @@ export default function ChatPage() {
       const base64Audio = btoa(binaryString);
       
       // 调用后端语音转文字API
-      const response = await fetch(`${process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : ''}/speech/stt`, {
+      const API_BASE_URL = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:8000' 
+        : (process.env.NEXT_PUBLIC_API_URL || 'https://api-text-generation.runpod.app');
+      
+      const response = await fetch(`${API_BASE_URL}/speech/stt`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1067,7 +1071,11 @@ export default function ChatPage() {
       }
       
       // 调用后端文字转语音API
-      const response = await fetch(`${process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : ''}/speech/tts`, {
+      const API_BASE_URL = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:8000' 
+        : (process.env.NEXT_PUBLIC_API_URL || 'https://api-text-generation.runpod.app');
+      
+      const response = await fetch(`${API_BASE_URL}/speech/tts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

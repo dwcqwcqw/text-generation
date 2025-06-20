@@ -22,11 +22,21 @@ wrangler deploy --config wrangler-api.toml --env production
 
 if [ $? -eq 0 ]; then
     echo "✅ API部署成功！"
-    echo "🔗 API地址将会是: https://text-generation-api.your-domain.workers.dev"
     echo ""
-    echo "📝 请更新前端配置中的NEXT_PUBLIC_API_URL变量"
-    echo "   在Cloudflare Pages环境变量中设置:"
-    echo "   NEXT_PUBLIC_API_URL=https://text-generation-api.your-domain.workers.dev"
+    echo "🔗 API 端点："
+    echo "   Worker URL: https://text-generation-api.YOUR_SUBDOMAIN.workers.dev"
+    echo ""
+    echo "📝 请在 Cloudflare Pages 环境变量中设置:"
+    echo "   NEXT_PUBLIC_API_URL=https://text-generation-api.YOUR_SUBDOMAIN.workers.dev"
+    echo ""
+    echo "🎯 支持的 API 端点："
+    echo "   POST /speech/stt     - 语音转文字"
+    echo "   POST /speech/tts     - 文字转语音"
+    echo "   POST /chat/save      - 保存聊天记录"
+    echo "   GET  /chat/load/{id} - 加载聊天记录"
+    echo "   GET  /health         - 健康检查"
+    echo ""
+    echo "⚠️  注意：请将 YOUR_SUBDOMAIN 替换为你实际的 Workers 子域名"
 else
     echo "❌ 部署失败"
     exit 1

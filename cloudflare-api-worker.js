@@ -202,10 +202,169 @@ export default {
         });
       }
       
+      // Speech to Text endpoint (proxy to RunPod)
+      if (path === '/speech/stt' && request.method === 'POST') {
+        const body = await request.json();
+        const { audio_data, format = 'webm' } = body;
+        
+        if (!audio_data) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: '缺少音频数据'
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        
+        // Proxy to RunPod Whisper API
+        const runpodPayload = {
+          input: {
+            audio_data,
+            format,
+            model_path: "/runpod-volume/voice/whisper-large-v3-turbo",
+            task: "transcribe",
+            language: "auto"
+          }
+        };
+        
+        try {
+          const runpodResponse = await fetch('https://api.runpod.ai/v2/4cx6jtjdx6hdhr/runsync', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${env.RUNPOD_API_KEY || 'rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb'}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(runpodPayload)
+          });
+          
+          if (runpodResponse.ok) {
+            const result = await runpodResponse.json();
+            
+            if (result.status === 'COMPLETED') {
+              let transcription = '';
+              if (typeof result.output === 'string') {
+                transcription = result.output;
+              } else if (result.output && typeof result.output === 'object') {
+                transcription = result.output.text || result.output.transcription || '';
+              }
+              
+              return new Response(JSON.stringify({
+                success: true,
+                text: transcription.trim()
+              }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              });
+            } else {
+              return new Response(JSON.stringify({
+                success: false,
+                error: result.error || '语音识别失败'
+              }), {
+                status: 500,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              });
+            }
+          } else {
+            throw new Error(`RunPod API error: ${runpodResponse.status}`);
+          }
+        } catch (error) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: `语音识别服务异常: ${error.message}`
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      
+      // Text to Speech endpoint (proxy to MiniMax)
+      if (path === '/speech/tts' && request.method === 'POST') {
+        const body = await request.json();
+        const { text, voice_id = 'female-shaonv', speed = 1.0, volume = 1.0, pitch = 0 } = body;
+        
+        if (!text || !text.trim()) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: '文本内容不能为空'
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        
+        // MiniMax TTS API
+        const minimaxUrl = `https://api.minimax.io/v1/t2a_v2?GroupId=${env.MINIMAX_GROUP_ID || '1925025302392607036'}`;
+        const minimaxPayload = {
+          model: "speech-02-turbo",
+          text: text,
+          stream: false,
+          voice_setting: {
+            voice_id,
+            speed,
+            vol: volume,
+            pitch
+          },
+          audio_setting: {
+            sample_rate: 32000,
+            bitrate: 128000,
+            format: "mp3",
+            channel: 1
+          }
+        };
+        
+        try {
+          const minimaxResponse = await fetch(minimaxUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${env.MINIMAX_API_KEY || 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJCRUkgTEkiLCJVc2VyTmFtZSI6IkJFSSBMSSIsIkFjY291bnQiOiIiLCJTdWJqZWN0SUQiOiIxOTI1MDI1MzAyNDAwOTk1NjQ0IiwiUGhvbmUiOiIiLCJHcm91cElEIjoiMTkyNTAyNTMwMjM5MjYwNzAzNiIsIlBhZ2VOYW1lIjoiIiwiTWFpbCI6ImJhaWxleWxpYmVpQGdtYWlsLmNvbSIsIkNyZWF0ZVRpbWUiOiIyMDI1LTA1LTIxIDEyOjIyOjI4IiwiVG9rZW5UeXBlIjoxLCJpc3MiOiJtaW5pbWF4In0.cMEP1g8YBLysihnD5RfmqtxGAGfR3XYxdXOAHurxoV5u92-ze8j5Iv1hc7O9qgFAoZyi2-eKRl6iRF3JM_IE1RQ6GXmfQnpr4a0VINu7c2GDW-x_4I-7CTHQTAmXfZOp6bVMbFvZqQDS9mzMexYDcFOghwJm1jFKhisU3J4996BqxC6R_u1J15yWkAb0Y5SX18hlYBEuO8MYPjAECSAcSthXIPxo4KQmd1LPuC2URnlhHBa6kvV0pZGp9tggSUlabyQaliCky8fxfOgyJc1YThQybg3iJ2VlYNnIhSj73SZ3pl6nB1unoiCsusAY0_mbzgcAiTd2rpKTh9xmUtcIxw'}`
+            },
+            body: JSON.stringify(minimaxPayload)
+          });
+          
+          if (minimaxResponse.ok) {
+            const result = await minimaxResponse.json();
+            
+            if (result.data && result.data.audio) {
+              // Convert hex audio to base64
+              const hexAudio = result.data.audio;
+              const audioBytes = new Uint8Array(hexAudio.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+              const audioBase64 = btoa(String.fromCharCode(...audioBytes));
+              
+              return new Response(JSON.stringify({
+                success: true,
+                audio_data: audioBase64
+              }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              });
+            } else {
+              return new Response(JSON.stringify({
+                success: false,
+                error: '音频生成失败'
+              }), {
+                status: 500,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              });
+            }
+          } else {
+            throw new Error(`MiniMax API error: ${minimaxResponse.status}`);
+          }
+        } catch (error) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: `语音合成服务异常: ${error.message}`
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      
       // Default response
       return new Response(JSON.stringify({
         message: "AI Chat API is running",
-        endpoints: ["/chat/save", "/chat/load/{id}", "/health"]
+        endpoints: ["/chat/save", "/chat/load/{id}", "/speech/stt", "/speech/tts", "/health"]
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
