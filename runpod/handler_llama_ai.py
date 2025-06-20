@@ -500,48 +500,28 @@ def handle_text_generation(input_data):
     """处理文本生成请求（原有逻辑）"""
     try:
         # 获取参数
-        query = input_data.get("prompt", "")
-        user_message = input_data.get("user_message", query)
-        conversation_history = input_data.get("conversation_history", [])
-        max_length = input_data.get("max_length", 1024)
+        prompt = input_data.get("prompt", "")
+        history = input_data.get("history", [])
         max_tokens = input_data.get("max_tokens", 2048)
         temperature = input_data.get("temperature", 0.7)
-        top_p = input_data.get("top_p", 0.9)
         stream = input_data.get("stream", False)
-        model_name = input_data.get("model", "llama")
         persona = input_data.get("persona", "default")
         
-        if not user_message.strip():
+        if not prompt.strip():
             return {"error": "用户消息不能为空"}
         
         # 确保模型已加载
-        success, message = ensure_model_loaded(model_name)
-        if not success:
-            return {"error": message}
+        global model
+        if not model:
+            logger.info("🔄 模型未加载，开始初始化...")
+            if not initialize_model():
+                return {"error": "模型初始化失败"}
         
-        # 构建对话历史
-        messages = []
-        
-        # 添加系统提示
-        system_prompt = get_system_prompt(persona)
-        messages.append({"role": "system", "content": system_prompt})
-        
-        # 添加历史对话
-        for msg in conversation_history[-10:]:  # 限制历史长度
-            if isinstance(msg, dict) and "role" in msg and "content" in msg:
-                messages.append(msg)
-        
-        # 添加当前用户消息
-        messages.append({"role": "user", "content": user_message})
-        
-        logger.info(f"🤖 开始生成回复，模型: {model_name}, 用户消息: {user_message[:100]}...")
+        logger.info(f"🤖 开始生成回复，用户消息: {prompt[:100]}...")
         
         # 生成回复
-        if stream:
-            return generate_streaming_response(messages, max_tokens, temperature, top_p)
-        else:
-            response = generate_response(messages, max_tokens, temperature, top_p)
-            return {"response": response, "success": True}
+        response = generate_response(prompt, persona, history, stream)
+        return {"response": response, "success": True}
             
     except Exception as e:
         logger.error(f"❌ 文本生成处理异常: {e}")
