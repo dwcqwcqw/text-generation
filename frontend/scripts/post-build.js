@@ -46,7 +46,7 @@ console.log('✅ Created _headers file with proper MIME types');
 // 创建_routes.json文件，确保正确的路由处理
 const routesContent = `{
   "version": 1,
-  "include": ["/", "/test/*", "/debug/*"],
+  "include": ["/", "/test/*", "/debug/*", "/api/*"],
   "exclude": ["/_next/*", "/*.css", "/*.js", "/favicon.ico", "/fix-mime.js"]
 }`;
 

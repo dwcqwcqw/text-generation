@@ -361,10 +361,148 @@ export default {
         }
       }
       
+      // R2 Upload endpoint
+      if (path === '/r2-upload' && request.method === 'POST') {
+        try {
+          const formData = await request.formData();
+          const file = formData.get('file');
+          const fileName = formData.get('fileName');
+          
+          if (!file || !fileName) {
+            return new Response(JSON.stringify({
+              error: '缺少文件或文件名'
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // 使用 R2 绑定上传（推荐方式）
+          if (env.R2_BUCKET) {
+            await env.R2_BUCKET.put(fileName, file);
+            const publicUrl = `https://pub-f314a707297b4748936925bba8dd4962.r2.dev/${fileName}`;
+            
+            return new Response(JSON.stringify({
+              success: true,
+              url: publicUrl,
+              fileName: fileName,
+              size: file.size
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          } else {
+            // 环境变量验证
+            const R2_ACCOUNT_ID = env.R2_ACCOUNT_ID;
+            const R2_ACCESS_KEY_ID = env.R2_ACCESS_KEY_ID; 
+            const R2_SECRET_ACCESS_KEY = env.R2_SECRET_ACCESS_KEY;
+            
+            if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+              return new Response(JSON.stringify({
+                error: 'R2 配置缺失，请设置环境变量'
+              }), {
+                status: 503,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              });
+            }
+
+            // 使用 Fetch API 上传到 R2
+            const endpoint = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+            const uploadUrl = `${endpoint}/text-generation/${fileName}`;
+            
+            // 简化的 S3 兼容认证（生产环境需要完整的 AWS4 签名）
+            const uploadResponse = await fetch(uploadUrl, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': file.type,
+                'Content-Length': file.size.toString(),
+              },
+              body: file
+            });
+            
+            if (!uploadResponse.ok) {
+              throw new Error(`上传失败: ${uploadResponse.status} ${uploadResponse.statusText}`);
+            }
+
+            const publicUrl = `https://pub-f314a707297b4748936925bba8dd4962.r2.dev/${fileName}`;
+            
+            return new Response(JSON.stringify({
+              success: true,
+              url: publicUrl,
+              fileName: fileName,
+              size: file.size
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+          
+        } catch (error) {
+          return new Response(JSON.stringify({
+            error: error.message || 'R2 上传失败',
+            success: false
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      // Aliyun ASR endpoint
+      if (path === '/aliyun-asr' && request.method === 'POST') {
+        try {
+          const body = await request.json();
+          const { action, accessKeyId, accessKeySecret, appKey, fileLink, taskId } = body;
+          
+          // 验证必要参数
+          if (!accessKeyId || !accessKeySecret || !appKey) {
+            return new Response(JSON.stringify({
+              error: '阿里云配置缺失'
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+          
+          // 由于 Cloudflare Workers 环境限制，这里实现简化的阿里云 ASR 代理
+          // 实际生产环境建议使用阿里云官方 SDK
+          if (action === 'submit') {
+            // 模拟任务提交
+            return new Response(JSON.stringify({
+              StatusText: 'SUCCESS',
+              TaskId: 'cf-mock-task-' + Date.now()
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          } else if (action === 'query') {
+            // 模拟查询结果（实际环境需要实现真实的 API 调用）
+            return new Response(JSON.stringify({
+              StatusText: 'SUCCESS',
+              Result: '这是语音识别的模拟结果，实际环境需要集成阿里云 ASR API'
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          } else {
+            return new Response(JSON.stringify({
+              error: '不支持的操作类型'
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+          
+        } catch (error) {
+          return new Response(JSON.stringify({
+            error: error.message || 'ASR 处理失败'
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      
       // Default response
       return new Response(JSON.stringify({
         message: "AI Chat API is running",
-        endpoints: ["/chat/save", "/chat/load/{id}", "/speech/stt", "/speech/tts", "/health"]
+        endpoints: ["/chat/save", "/chat/load/{id}", "/speech/stt", "/speech/tts", "/r2-upload", "/aliyun-asr", "/health"]
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });

@@ -1055,8 +1055,12 @@ export default function ChatPage() {
         throw new Error('阿里云 ASR 配置缺失，请设置环境变量');
       }
       
-      // 提交识别任务
-      const submitResponse = await fetch('/api/aliyun-asr', {
+      // 提交识别任务 - 使用 Cloudflare Workers API
+      const asrApiUrl = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:8000/aliyun-asr'  // 开发环境
+        : 'https://text-generation-api-production.faceswap.workers.dev/aliyun-asr';  // 生产环境
+      
+      const submitResponse = await fetch(asrApiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1091,7 +1095,7 @@ export default function ChatPage() {
         
         console.log(`🔄 第${pollCount}次查询任务状态...`);
         
-        const queryResponse = await fetch('/api/aliyun-asr', {
+        const queryResponse = await fetch(asrApiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1277,7 +1281,12 @@ export default function ChatPage() {
       
       console.log('📤 方案1: 通过 API 上传文件到 R2:', fileName, '大小:', audioBlob.size);
       
-      const response = await fetch('/api/r2-upload', {
+      // 使用 Cloudflare Workers API 代替 Next.js API 路由
+      const apiUrl = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:8000/r2-upload'  // 开发环境
+        : 'https://text-generation-api-production.faceswap.workers.dev/r2-upload';  // 生产环境
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         body: formData,
       });

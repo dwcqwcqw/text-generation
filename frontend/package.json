@@ -5,12 +5,15 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build && node scripts/post-build.js",
+    "build:cloudflare": "npx @cloudflare/next-on-pages",
     "start": "next start",
     "lint": "next lint",
-    "export": "next build && next export"
+    "export": "next build && next export",
+    "preview": "npx wrangler pages dev .vercel/output/static --compatibility-flag=nodejs_compat"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.832.0",
+    "@cloudflare/next-on-pages": "^1.13.12",
     "clsx": "^2.0.0",
     "lucide-react": "^0.292.0",
     "next": "14.0.0",

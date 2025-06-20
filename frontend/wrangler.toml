@@ -1,22 +1,7 @@
-[site]
-bucket = "./out"
-entry-point = "."
-
-[build]
-command = "npm run build"
-output_dir = "out"
-
-[build.upload]
-format = "directory"
-
-[[build.processing.resources]]
-paths = ["/_next/static/chunks/*.js"]
-content_type = "application/javascript"
-
-[[build.processing.resources]]
-paths = ["/_next/static/css/*.css"]
-content_type = "text/css"
+name = "text-generation-frontend"
+compatibility_date = "2024-05-21"
+pages_build_output_dir = "out"
 
 [env.production]
-NEXT_PUBLIC_API_URL = "https://api-text-generation.runpod.app"
+NEXT_PUBLIC_API_URL = "https://text-generation-api-production.faceswap.workers.dev"
 NEXT_PUBLIC_R2_BUCKET = "text-generation" 
