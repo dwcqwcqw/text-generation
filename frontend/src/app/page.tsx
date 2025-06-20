@@ -1024,31 +1024,56 @@ export default function ChatPage() {
       const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
       const base64Audio = btoa(binaryString);
       
-      // 调用后端语音转文字API
-      const API_BASE_URL = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:8000' 
-        : (process.env.NEXT_PUBLIC_API_URL || 'https://api-text-generation.runpod.app');
+      // 直接调用 RunPod Whisper API
+      const RUNPOD_API_KEY = process.env.NEXT_PUBLIC_RUNPOD_API_KEY;
+      const RUNPOD_ENDPOINT = `https://api.runpod.ai/v2/${process.env.NEXT_PUBLIC_RUNPOD_ENDPOINT_ID || '4cx6jtjdx6hdhr'}/runsync`;
       
-      const response = await fetch(`${API_BASE_URL}/speech/stt`, {
+      if (!RUNPOD_API_KEY) {
+        alert('语音识别服务未配置，请联系管理员');
+        return;
+      }
+      
+      const runpodPayload = {
+        input: {
+          audio_data: base64Audio,
+          format: 'webm',
+          model_path: "/runpod-volume/voice/whisper-large-v3-turbo",
+          task: "transcribe",
+          language: "auto"
+        }
+      };
+      
+      console.log('🚀 直接调用 RunPod Whisper API...');
+      const response = await fetch(RUNPOD_ENDPOINT, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${RUNPOD_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          audio_data: base64Audio,
-          format: 'webm'
-        }),
+        body: JSON.stringify(runpodPayload),
       });
       
       const result = await response.json();
-      console.log('📝 语音转文字结果:', result);
+      console.log('📝 RunPod 语音转文字结果:', result);
       
-      if (result.success && result.text) {
-        // 将转录文本设置到输入框
-        setInputValue(result.text);
-        console.log('✅ 语音转文字成功:', result.text);
+      if (result.status === 'COMPLETED') {
+        let transcription = '';
+        if (typeof result.output === 'string') {
+          transcription = result.output;
+        } else if (result.output && typeof result.output === 'object') {
+          transcription = result.output.text || result.output.transcription || '';
+        }
+        
+        if (transcription) {
+          // 将转录文本设置到输入框
+          setInputValue(transcription.trim());
+          console.log('✅ 语音转文字成功:', transcription);
+        } else {
+          console.error('❌ 未检测到语音内容');
+          alert('未检测到语音内容，请重试');
+        }
       } else {
-        console.error('❌ 语音转文字失败:', result.error);
+        console.error('❌ 语音转文字失败:', result.error || 'RunPod API 错误');
         alert(result.error || '语音识别失败，请重试');
       }
     } catch (error) {
@@ -1070,31 +1095,46 @@ export default function ChatPage() {
         currentAudio.currentTime = 0;
       }
       
-      // 调用后端文字转语音API
-      const API_BASE_URL = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:8000' 
-        : (process.env.NEXT_PUBLIC_API_URL || 'https://api-text-generation.runpod.app');
+      // 直接调用 MiniMax TTS API
+      const MINIMAX_API_KEY = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJCRUkgTEkiLCJVc2VyTmFtZSI6IkJFSSBMSSIsIkFjY291bnQiOiIiLCJTdWJqZWN0SUQiOiIxOTI1MDI1MzAyNDAwOTk1NjQ0IiwiUGhvbmUiOiIiLCJHcm91cElEIjoiMTkyNTAyNTMwMjM5MjYwNzAzNiIsIlBhZ2VOYW1lIjoiIiwiTWFpbCI6ImJhaWxleWxpYmVpQGdtYWlsLmNvbSIsIkNyZWF0ZVRpbWUiOiIyMDI1LTA1LTIxIDEyOjIyOjI4IiwiVG9rZW5UeXBlIjoxLCJpc3MiOiJtaW5pbWF4In0.cMEP1g8YBLysihnD5RfmqtxGAGfR3XYxdXOAHurxoV5u92-ze8j5Iv1hc7O9qgFAoZyi2-eKRl6iRF3JM_IE1RQ6GXmfQnpr4a0VINu7c2GDW-x_4I-7CTHQTAmXfZOp6bVMbFvZqQDS9mzMexYDcFOghwJm1jFKhisU3J4996BqxC6R_u1J15yWkAb0Y5SX18hlYBEuO8MYPjAECSAcSthXIPxo4KQmd1LPuC2URnlhHBa6kvV0pZGp9tggSUlabyQaliCky8fxfOgyJc1YThQybg3iJ2VlYNnIhSj73SZ3pl6nB1unoiCsusAY0_mbzgcAiTd2rpKTh9xmUtcIxw';
+      const MINIMAX_GROUP_ID = '1925025302392607036';
+      const minimaxUrl = `https://api.minimax.io/v1/t2a_v2?GroupId=${MINIMAX_GROUP_ID}`;
       
-      const response = await fetch(`${API_BASE_URL}/speech/tts`, {
+      const minimaxPayload = {
+        model: "speech-02-turbo",
+        text: text,
+        stream: false,
+        voice_setting: {
+          voice_id: 'female-shaonv',
+          speed: 1.0,
+          vol: 1.0,
+          pitch: 0
+        },
+        audio_setting: {
+          sample_rate: 32000,
+          bitrate: 128000,
+          format: "mp3",
+          channel: 1
+        }
+      };
+      
+      console.log('🚀 直接调用 MiniMax TTS API...');
+      const response = await fetch(minimaxUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${MINIMAX_API_KEY}`
         },
-        body: JSON.stringify({
-          text: text,
-          voice_id: 'female-shaonv',  // 可以根据需要调整
-          speed: 1.0,
-          volume: 1.0,
-          pitch: 0
-        }),
+        body: JSON.stringify(minimaxPayload),
       });
       
       const result = await response.json();
-      console.log('🎵 文字转语音结果:', result);
+      console.log('🎵 MiniMax 文字转语音结果:', result);
       
-      if (result.success && result.audio_data) {
-        // 将base64音频数据转换为音频文件并播放
-        const audioBytes = Uint8Array.from(atob(result.audio_data), c => c.charCodeAt(0));
+      if (result.data && result.data.audio) {
+        // Convert hex audio to base64
+        const hexAudio = result.data.audio;
+        const audioBytes = new Uint8Array(hexAudio.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
         const audioBlob = new Blob([audioBytes], { type: 'audio/mp3' });
         const audioUrl = URL.createObjectURL(audioBlob);
         
@@ -1115,8 +1155,8 @@ export default function ChatPage() {
         await audio.play();
         console.log('✅ 开始播放语音');
       } else {
-        console.error('❌ 文字转语音失败:', result.error);
-        alert(result.error || '语音合成失败，请重试');
+        console.error('❌ 文字转语音失败:', result);
+        alert('语音合成失败，请重试');
         setIsPlayingAudio(false);
       }
     } catch (error) {
