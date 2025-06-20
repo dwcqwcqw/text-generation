@@ -357,10 +357,6 @@ def load_whisper_model(model_path: str):
     try:
         logger.info(f"🎤 开始加载Whisper模型: {model_path}")
         
-        # 检查模型文件是否存在
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Whisper模型文件不存在: {model_path}")
-        
         # 导入whisper相关库
         try:
             import whisper
@@ -369,17 +365,54 @@ def load_whisper_model(model_path: str):
             logger.error("❌ Whisper库未安装，请安装: pip install openai-whisper")
             raise
         
-        # 加载模型
-        whisper_model = whisper.load_model(model_path)
-        whisper_model_path = model_path
+        # 判断是文件路径还是模型名称
+        if model_path.startswith("/") and os.path.exists(model_path):
+            # 如果是文件路径且存在，检查是否是文件夹
+            if os.path.isdir(model_path):
+                # 如果是文件夹，检查是否包含 model.safetensors
+                safetensors_path = os.path.join(model_path, "model.safetensors")
+                if os.path.exists(safetensors_path):
+                    logger.info(f"🔍 发现自定义模型文件夹: {model_path}")
+                    # 使用文件夹路径加载模型
+                    whisper_model = whisper.load_model(model_path)
+                else:
+                    logger.warning(f"⚠️ 文件夹 {model_path} 不包含 model.safetensors，尝试使用标准模型名")
+                    # 提取模型名称并使用标准加载方式
+                    model_name = os.path.basename(model_path)
+                    if model_name in ['tiny.en', 'tiny', 'base.en', 'base', 'small.en', 'small', 
+                                     'medium.en', 'medium', 'large-v1', 'large-v2', 'large-v3', 
+                                     'large', 'large-v3-turbo', 'turbo']:
+                        whisper_model = whisper.load_model(model_name)
+                    else:
+                        # 尝试使用 large-v3-turbo 作为默认
+                        logger.info("🔄 使用 large-v3-turbo 作为备用模型")
+                        whisper_model = whisper.load_model("large-v3-turbo")
+            else:
+                # 如果是文件，直接加载
+                whisper_model = whisper.load_model(model_path)
+        else:
+            # 如果是标准模型名称，直接加载
+            logger.info(f"🔄 使用标准模型名称: {model_path}")
+            whisper_model = whisper.load_model(model_path)
         
+        whisper_model_path = model_path
         logger.info(f"✅ Whisper模型加载成功: {os.path.basename(model_path)}")
         return True
         
     except Exception as e:
         logger.error(f"❌ Whisper模型加载失败: {e}")
-        whisper_model = None
-        return False
+        # 作为最后的回退，尝试加载 large-v3-turbo
+        try:
+            logger.info("🔄 尝试加载备用模型 large-v3-turbo")
+            import whisper
+            whisper_model = whisper.load_model("large-v3-turbo")
+            whisper_model_path = "large-v3-turbo"
+            logger.info("✅ 备用Whisper模型加载成功")
+            return True
+        except Exception as fallback_e:
+            logger.error(f"❌ 备用模型也加载失败: {fallback_e}")
+            whisper_model = None
+            return False
 
 def transcribe_audio(audio_data: str, audio_format: str = "webm", language: str = "auto") -> str:
     """使用Whisper进行语音转文字"""
