@@ -391,16 +391,17 @@ export default {
             const result = await minimaxResponse.json();
             
             if (result.data && result.data.audio) {
-              // Convert hex audio to base64
+              // Convert hex audio to binary
               const hexAudio = result.data.audio;
               const audioBytes = new Uint8Array(hexAudio.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-              const audioBase64 = btoa(String.fromCharCode(...audioBytes));
               
-              return new Response(JSON.stringify({
-                success: true,
-                audio_data: audioBase64
-              }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              // Return actual audio file
+              return new Response(audioBytes, {
+                headers: { 
+                  ...corsHeaders, 
+                  'Content-Type': 'audio/mpeg',
+                  'Content-Disposition': 'inline; filename="speech.mp3"'
+                }
               });
             } else {
               return new Response(JSON.stringify({
