@@ -1165,26 +1165,50 @@ export default function ChatPage() {
       
       console.log('🔍 检查缓存:', r2PublicUrl);
       
-      // 首先检查 R2 中是否已有缓存的音频文件
+      // 尝试直接播放缓存音频（通过 Audio 对象的 error 事件判断是否存在）
       try {
-        const cacheResponse = await fetch(r2PublicUrl, { method: 'HEAD' });
-        if (cacheResponse.ok) {
-          console.log('✅ 发现缓存音频，直接使用:', r2PublicUrl);
-          const audio = new Audio(r2PublicUrl);
-          setCurrentAudio(audio);
+        console.log('🔍 尝试播放缓存音频:', r2PublicUrl);
+        const testAudio = new Audio(r2PublicUrl);
+        
+        // 使用 Promise 来处理音频加载
+        const cacheExists = await new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            testAudio.src = '';
+            resolve(false);
+          }, 3000); // 3秒超时
           
-          audio.onended = () => {
+          testAudio.oncanplaythrough = () => {
+            clearTimeout(timeout);
+            resolve(true);
+          };
+          
+          testAudio.onerror = () => {
+            clearTimeout(timeout);
+            resolve(false);
+          };
+          
+          // 尝试加载音频
+          testAudio.load();
+        });
+        
+        if (cacheExists) {
+          console.log('✅ 发现缓存音频，直接使用:', r2PublicUrl);
+          setCurrentAudio(testAudio);
+          
+          testAudio.onended = () => {
             setIsPlayingAudio(false);
           };
           
-          audio.onerror = (error) => {
+          testAudio.onerror = (error) => {
             console.error('❌ 缓存音频播放失败:', error);
             setIsPlayingAudio(false);
           };
           
-          await audio.play();
+          await testAudio.play();
           console.log('✅ 开始播放缓存语音');
           return;
+        } else {
+          console.log('⚠️ 缓存不存在，继续生成新音频');
         }
       } catch (error) {
         console.log('⚠️ 缓存检查失败，继续生成新音频:', error);
