@@ -1018,18 +1018,23 @@ export default function ChatPage() {
     try {
       console.log('🎤 处理语音输入，大小:', audioBlob.size);
       
-      // 首先将录音保存到 R2
+      // 检查是否可以使用 R2 上传
       const audioFileName = `voice_input_${Date.now()}.webm`;
-      let audioUrl: string;
+      let audioUrl: string | null = null;
       
       try {
-        console.log('📤 上传语音文件到 R2...');
-        await uploadAudioToR2(audioBlob, audioFileName);
-        audioUrl = `https://pub-f314a707297b4748936925bba8dd4962.r2.dev/${audioFileName}`;
+        console.log('📤 尝试上传语音文件到 R2...');
+        audioUrl = await uploadAudioToR2(audioBlob, audioFileName);
         console.log('✅ 语音文件已上传:', audioUrl);
       } catch (uploadError) {
-        console.error('❌ R2 上传失败:', uploadError);
-        alert('语音文件上传失败，请重试');
+        console.warn('⚠️ R2 上传失败，尝试直接处理:', uploadError);
+        // 如果上传失败，我们将使用直接的 base64 方式，但这对阿里云 ASR 不适用
+        // 暂时改为提示用户配置环境变量
+      }
+      
+      // 如果没有有效的外部 URL，无法使用阿里云 ASR
+      if (!audioUrl || audioUrl.startsWith('blob:')) {
+        alert('语音识别需要配置 R2 存储。请联系管理员配置环境变量后重试。\n\n当前可以继续使用文字输入。');
         return;
       }
       
@@ -1264,30 +1269,57 @@ export default function ChatPage() {
 
   // R2 上传函数
   const uploadAudioToR2 = async (audioBlob: Blob, fileName: string) => {
+    // 方案1：尝试使用 API 端点上传
     try {
       const formData = new FormData();
       formData.append('file', audioBlob, fileName);
       formData.append('fileName', fileName);
       
-      console.log('📤 通过 API 上传文件到 R2:', fileName, '大小:', audioBlob.size);
+      console.log('📤 方案1: 通过 API 上传文件到 R2:', fileName, '大小:', audioBlob.size);
       
       const response = await fetch('/api/r2-upload', {
         method: 'POST',
         body: formData,
       });
       
+      console.log('📊 R2 上传响应状态:', response.status, response.statusText);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '上传失败');
+        // 尝试解析错误响应
+        let errorMessage = `上传失败 (${response.status})`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          // 如果响应不是 JSON，获取文本内容
+          try {
+            const errorText = await response.text();
+            console.error('❌ 非 JSON 响应:', errorText.substring(0, 200));
+            errorMessage = `服务器错误: ${response.status} ${response.statusText}`;
+          } catch (textError) {
+            console.error('❌ 无法读取响应内容:', textError);
+          }
+        }
+        throw new Error(errorMessage);
       }
       
-      const result = await response.json();
+      let result;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        console.error('❌ 解析成功响应失败:', parseError);
+        throw new Error('服务器响应格式错误');
+      }
+      
       console.log('✅ R2 上传成功:', result.url);
       return result.url;
       
-    } catch (error) {
-      console.error('❌ R2 上传失败:', error);
-      throw new Error(`R2 上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    } catch (apiError) {
+      console.error('❌ R2 API 上传失败:', apiError);
+      
+      // 显示详细错误信息给用户
+      const errorMsg = apiError instanceof Error ? apiError.message : '未知错误';
+      throw new Error(`R2 上传失败: ${errorMsg}。请检查 Cloudflare Pages 环境变量配置。`);
     }
   };
 
