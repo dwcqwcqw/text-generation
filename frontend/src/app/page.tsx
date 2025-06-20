@@ -1038,89 +1038,40 @@ export default function ChatPage() {
         return;
       }
       
-      // 调用阿里云录音文件识别 API
-      console.log('🚀 调用阿里云语音识别...');
+      // 调用OpenAI Whisper语音识别 API
+      console.log('🚀 调用OpenAI Whisper语音识别...');
       
-      // 提交识别任务 - 使用 Cloudflare Workers API
+      // 直接调用 Whisper API - 使用 Cloudflare Workers API
       const asrApiUrl = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:8000/aliyun-asr'  // 开发环境
-        : 'https://text-generation-api-production.faceswap.workers.dev/aliyun-asr';  // 生产环境
+        ? 'http://localhost:8000/whisper-asr'  // 开发环境
+        : 'https://text-generation.faceswap.workers.dev/whisper-asr';  // 生产环境，与您的Worker域名匹配
       
-      const submitResponse = await fetch(asrApiUrl, {
+      const response = await fetch(asrApiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'submit',
-          fileLink: audioUrl
+          fileLink: audioUrl,
+          language: 'zh'  // 设置中文识别
         }),
       });
       
-      if (!submitResponse.ok) {
-        throw new Error(`提交任务失败: ${submitResponse.status}`);
+      if (!response.ok) {
+        throw new Error(`Whisper识别失败: ${response.status}`);
       }
       
-      const submitResult = await submitResponse.json();
-      console.log('📝 阿里云任务提交结果:', submitResult);
+      const result = await response.json();
+      console.log('📝 OpenAI Whisper识别结果:', result);
       
-      if (submitResult.StatusText !== 'SUCCESS') {
-        throw new Error(`任务提交失败: ${submitResult.StatusText}`);
-      }
-      
-      const taskId = submitResult.TaskId;
-      console.log('⏳ 开始轮询任务状态, TaskID:', taskId);
-      
-      // 轮询查询识别结果
-      let pollCount = 0;
-      const maxPolls = 30; // 最多轮询30次 (5分钟)
-      
-      while (pollCount < maxPolls) {
-        await new Promise(resolve => setTimeout(resolve, 10000)); // 等待10秒
-        pollCount++;
+      if (result.success && result.text) {
+        console.log('✅ 语音识别成功!');
+        setInputValue(result.text);
         
-        console.log(`🔄 第${pollCount}次查询任务状态...`);
-        
-        const queryResponse = await fetch(asrApiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            action: 'query',
-            taskId: taskId
-          }),
-        });
-        
-        if (!queryResponse.ok) {
-          throw new Error(`查询任务失败: ${queryResponse.status}`);
-        }
-        
-        const queryResult = await queryResponse.json();
-        console.log('📊 任务状态查询结果:', queryResult);
-        
-        const statusText = queryResult.StatusText;
-        
-        if (statusText === 'SUCCESS') {
-          console.log('✅ 语音识别成功!');
-          const transcription = queryResult.Result;
-          setInputValue(transcription);
-          
-          // 清理临时音频文件（可选）
-          console.log('🗑️ 识别完成，可以清理临时文件:', audioFileName);
-          break;
-          
-        } else if (statusText === 'RUNNING' || statusText === 'QUEUEING') {
-          console.log(`⏳ 任务仍在处理中... (${statusText})`);
-          continue;
-          
-        } else {
-          throw new Error(`任务处理失败: ${statusText}`);
-        }
-      }
-      
-      if (pollCount >= maxPolls) {
-        throw new Error('语音识别超时，请重试');
+        // 清理临时音频文件（可选）
+        console.log('🗑️ 识别完成，可以清理临时文件:', audioFileName);
+      } else {
+        throw new Error(`识别失败: ${result.error || '未知错误'}`);
       }
       
     } catch (error) {
@@ -1292,7 +1243,7 @@ export default function ChatPage() {
       // 使用 Cloudflare Workers API 代替 Next.js API 路由
       const apiUrl = process.env.NODE_ENV === 'development' 
         ? 'http://localhost:8000/r2-upload'  // 开发环境
-        : 'https://text-generation-api-production.faceswap.workers.dev/r2-upload';  // 生产环境
+        : 'https://text-generation.faceswap.workers.dev/r2-upload';  // 生产环境，与您的Worker域名匹配
       
       const response = await fetch(apiUrl, {
         method: 'POST',

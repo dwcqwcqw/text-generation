@@ -1,151 +1,67 @@
 // Cloudflare Workers API for Chat History Management
 // Deploy this to Cloudflare Workers to handle backend API requests
 
-// 阿里云 OpenAPI 签名算法实现
-class AliyunSigner {
-  constructor(accessKeyId, accessKeySecret) {
-    this.accessKeyId = accessKeyId;
-    this.accessKeySecret = accessKeySecret;
+// OpenAI Whisper client class
+class OpenAIWhisperClient {
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+    this.baseUrl = 'https://api.openai.com/v1/audio/transcriptions';
   }
 
-  generateNonce() {
-    return Math.random().toString(36).substr(2, 15);
-  }
-
-  generateTimestamp() {
-    return new Date().toISOString();
-  }
-
-  percentEncode(value) {
-    return encodeURIComponent(value)
-      .replace(/!/g, '%21')
-      .replace(/'/g, '%27')
-      .replace(/\(/g, '%28')
-      .replace(/\)/g, '%29')
-      .replace(/\*/g, '%2A');
-  }
-
-  canonicalizeQueryString(parameters) {
-    const sortedKeys = Object.keys(parameters).sort();
-    const encodedParams = sortedKeys.map(key => {
-      return `${this.percentEncode(key)}=${this.percentEncode(parameters[key])}`;
-    });
-    return encodedParams.join('&');
-  }
-
-  createStringToSign(method, canonicalizedQueryString) {
-    return `${method}&${this.percentEncode('/')}&${this.percentEncode(canonicalizedQueryString)}`;
-  }
-
-  async calculateSignature(stringToSign) {
-    const key = `${this.accessKeySecret}&`;
-    const encoder = new TextEncoder();
-    
-    const keyBuffer = encoder.encode(key);
-    const dataBuffer = encoder.encode(stringToSign);
-    
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      keyBuffer,
-      { name: 'HMAC', hash: 'SHA-1' },
-      false,
-      ['sign']
-    );
-    
-    const signature = await crypto.subtle.sign('HMAC', cryptoKey, dataBuffer);
-    const signatureArray = new Uint8Array(signature);
-    
-    let binary = '';
-    for (let i = 0; i < signatureArray.byteLength; i++) {
-      binary += String.fromCharCode(signatureArray[i]);
-    }
-    return btoa(binary);
-  }
-
-  async generateSignedParams(action, parameters = {}) {
-    const commonParams = {
-      Action: action,
-      Version: '2021-12-21',  // 使用录音文件识别闲时版的正确版本
-      AccessKeyId: this.accessKeyId,
-      SignatureMethod: 'HMAC-SHA1',
-      Timestamp: this.generateTimestamp(),
-      SignatureVersion: '1.0',
-      SignatureNonce: this.generateNonce(),
-      Format: 'JSON'
-    };
-
-    const allParams = { ...commonParams, ...parameters };
-    const canonicalizedQueryString = this.canonicalizeQueryString(allParams);
-    const stringToSign = this.createStringToSign('POST', canonicalizedQueryString);
-    const signature = await this.calculateSignature(stringToSign);
-    
-    allParams.Signature = signature;
-    return allParams;
-  }
-}
-
-// 阿里云智能语音服务客户端
-class AliyunNLSClient {
-  constructor(accessKeyId, accessKeySecret, region = 'cn-shanghai') {
-    this.signer = new AliyunSigner(accessKeyId, accessKeySecret);
-    this.endpoint = `https://speechfiletranscriberlite.${region}.aliyuncs.com`;
-  }
-
-  async submitFileTranscriptionTask(appKey, fileLink, enableWords = false) {
-    // 构造任务参数
-    const task = {
-      appkey: appKey,
-      file_link: fileLink,
-      enable_words: enableWords
-    };
-
-    // 生成签名参数，包含 Task 参数用于签名计算
-    const signedParams = await this.signer.generateSignedParams('SubmitTask', {
-      Task: JSON.stringify(task)
-    });
-    
-    // 构造查询字符串
-    const queryString = new URLSearchParams(signedParams).toString();
-    const url = `${this.endpoint}/?${queryString}`;
-
-    // 使用 POST 方法，Task 参数已包含在签名中
-    const response = await fetch(this.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: queryString
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`阿里云 API 错误 ${response.status}: ${errorText}`);
-    }
-
-    return await response.json();
-  }
-
-  async getFileTranscriptionResult(taskId) {
-    const signedParams = await this.signer.generateSignedParams('GetTaskResult', {
-      TaskId: taskId
-    });
-    
-    const queryString = new URLSearchParams(signedParams).toString();
-    const url = `${this.endpoint}/?${queryString}`;
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
+  async transcribeAudio(audioUrl, options = {}) {
+    try {
+      // 首先下载音频文件
+      console.log('📥 下载音频文件:', audioUrl);
+      const audioResponse = await fetch(audioUrl);
+      
+      if (!audioResponse.ok) {
+        throw new Error(`音频文件下载失败: ${audioResponse.status}`);
       }
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`阿里云 API 错误 ${response.status}: ${errorText}`);
+      
+      const audioBlob = await audioResponse.blob();
+      console.log('✅ 音频文件下载成功，大小:', audioBlob.size);
+      
+      // 创建FormData
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'audio.wav');
+      formData.append('model', options.model || 'whisper-1');
+      
+      if (options.language) {
+        formData.append('language', options.language);
+      }
+      
+      if (options.prompt) {
+        formData.append('prompt', options.prompt);
+      }
+      
+      // 调用OpenAI Whisper API
+      console.log('🚀 调用OpenAI Whisper API...');
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenAI API 错误 ${response.status}: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Whisper 识别成功:', result);
+      
+      return {
+        success: true,
+        text: result.text,
+        language: result.language || 'unknown'
+      };
+      
+    } catch (error) {
+      console.error('❌ Whisper 识别失败:', error);
+      throw error;
     }
-
-    return await response.json();
   }
 }
 
@@ -594,255 +510,87 @@ export default {
         }
       }
 
-      // Aliyun ASR endpoint - 真实 API 实现
-      if (path === '/aliyun-asr' && request.method === 'POST') {
+      // OpenAI Whisper ASR endpoint
+      if (path === '/whisper-asr' && request.method === 'POST') {
         try {
           const body = await request.json();
-          const { action, fileLink, taskId } = body;
+          const { fileLink, language, prompt } = body;
           
-          // 从环境变量获取阿里云配置（支持 secret 和 env 变量）
-          const accessKeyId = env.ALIYUN_ACCESS_KEY_ID;
-          const accessKeySecret = env.ALIYUN_ACCESS_KEY_SECRET;
-          const appKey = env.ALIYUN_APP_KEY;
+          // 从环境变量获取OpenAI API Key
+          const openaiApiKey = env.OPENAI_API_KEY;
           
-          console.log('🔊 阿里云 ASR 请求:', { action, appKey: appKey?.substr(0, 10) + '...', fileLink });
-          
-          // 配置检查端点
-          if (action === 'config_check') {
-            return new Response(JSON.stringify({
-              success: true,
-              configStatus: {
-                accessKeyId: !!accessKeyId,
-                accessKeySecret: !!accessKeySecret,
-                appKey: !!appKey
-              },
-              message: '环境变量配置检查完成'
-            }), {
-              status: 200,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            });
-          }
-
-          // 调试Keys端点
-          if (action === 'debug_keys') {
-            try {
-              console.log('🔧 调试阿里云 Keys...');
-              
-              // 验证配置
-              if (!accessKeyId || !accessKeySecret || !appKey) {
-                return new Response(JSON.stringify({
-                  success: false,
-                  configStatus: {
-                    accessKeyId: !!accessKeyId,
-                    accessKeySecret: !!accessKeySecret,
-                    appKey: !!appKey
-                  },
-                  error: '阿里云配置缺失',
-                  message: '请检查环境变量设置'
-                }), {
-                  status: 400,
-                  headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                });
-              }
-
-              // 尝试调用阿里云 API 进行测试
-              const aliyunClient = new AliyunNLSClient(accessKeyId, accessKeySecret);
-              const testFileLink = fileLink || 'https://pub-f314a707297b4748936925bba8dd4962.r2.dev/test_voice_20250521_152935.wav';
-              
-              try {
-                console.log('🧪 测试阿里云 API 调用...');
-                const result = await aliyunClient.submitFileTranscriptionTask(appKey, testFileLink, false);
-                
-                return new Response(JSON.stringify({
-                  success: true,
-                  configStatus: {
-                    accessKeyId: true,
-                    accessKeySecret: true,
-                    appKey: true
-                  },
-                  aliyunTest: 'success',
-                  result: result,
-                  message: '阿里云 API 调用成功'
-                }), {
-                  headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                });
-                
-              } catch (aliyunError) {
-                console.error('❌ 阿里云 API 测试失败:', aliyunError);
-                
-                return new Response(JSON.stringify({
-                  success: false,
-                  configStatus: {
-                    accessKeyId: true,
-                    accessKeySecret: true,
-                    appKey: true
-                  },
-                  aliyunTest: 'failed',
-                  aliyunError: aliyunError.message,
-                  message: '阿里云 API 调用失败，但配置已设置'
-                }), {
-                  headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                });
-              }
-              
-            } catch (error) {
-              return new Response(JSON.stringify({
-                success: false,
-                error: error.message,
-                message: '调试过程出错'
-              }), {
-                status: 500,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-              });
-            }
-          }
+          console.log('🔊 OpenAI Whisper ASR 请求:', { fileLink, language, prompt });
           
           // 验证必要参数
-          if (!accessKeyId || !accessKeySecret || !appKey) {
+          if (!openaiApiKey) {
             return new Response(JSON.stringify({
-              error: '阿里云配置缺失',
-              received: { accessKeyId: !!accessKeyId, accessKeySecret: !!accessKeySecret, appKey: !!appKey },
-              envCheck: {
-                ALIYUN_ACCESS_KEY_ID: !!env.ALIYUN_ACCESS_KEY_ID,
-                ALIYUN_ACCESS_KEY_SECRET: !!env.ALIYUN_ACCESS_KEY_SECRET,
-                ALIYUN_APP_KEY: !!env.ALIYUN_APP_KEY
-              }
+              error: 'OpenAI API Key 缺失',
+              message: '请设置 OPENAI_API_KEY 环境变量'
             }), {
               status: 400,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
           }
-          
-          // 创建阿里云客户端
-          const aliyunClient = new AliyunNLSClient(accessKeyId, accessKeySecret);
-          
-          if (action === 'submit') {
-            if (!fileLink) {
-              return new Response(JSON.stringify({
-                error: '缺少音频文件链接'
-              }), {
-                status: 400,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-              });
-            }
-            
-            console.log('📤 提交识别任务到阿里云，文件链接:', fileLink);
-            
-            try {
-              // 调用真实的阿里云 API
-              const result = await aliyunClient.submitFileTranscriptionTask(appKey, fileLink, false);
-              
-              console.log('✅ 阿里云任务提交成功:', result);
-              
-              return new Response(JSON.stringify({
-                StatusText: 'SUCCESS',
-                TaskId: result.TaskId,
-                BizDuration: result.BizDuration || 0,
-                SolveTime: result.SolveTime || 0
-              }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-              });
-              
-            } catch (aliyunError) {
-              console.error('❌ 阿里云 API 调用失败:', aliyunError);
-              
-              // 如果阿里云 API 失败，提供备用方案
-              const fallbackTaskId = 'fallback-task-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8);
-              
-              return new Response(JSON.stringify({
-                StatusText: 'SUCCESS',
-                TaskId: fallbackTaskId,
-                BizDuration: 0,
-                SolveTime: 0,
-                warning: '使用备用识别服务',
-                aliyunError: aliyunError.message
-              }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-              });
-            }
-            
-          } else if (action === 'query') {
-            if (!taskId) {
-              return new Response(JSON.stringify({
-                error: '缺少任务ID'
-              }), {
-                status: 400,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-              });
-            }
-            
-            console.log('🔍 查询识别结果，任务ID:', taskId);
-            
-            // 如果是备用任务，返回模拟结果
-            if (taskId.startsWith('fallback-task-')) {
-              const mockResults = [
-                '你好，这是一个语音识别测试。',
-                '请问有什么可以帮助您的吗？',
-                '今天天气真不错呢。',
-                '语音识别功能正在正常工作。',
-                '感谢您使用我们的服务。'
-              ];
-              
-              const resultIndex = parseInt(taskId.slice(-1)) % mockResults.length;
-              const mockResult = mockResults[resultIndex] || mockResults[0];
-              
-              return new Response(JSON.stringify({
-                StatusText: 'SUCCESS',
-                Result: mockResult + ' (备用识别)',
-                BizDuration: 3000,
-                SolveTime: 1500
-              }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-              });
-            }
-            
-            try {
-              // 调用真实的阿里云查询 API
-              const result = await aliyunClient.getFileTranscriptionResult(taskId);
-              
-              console.log('✅ 阿里云查询成功:', result);
-              
-              return new Response(JSON.stringify({
-                StatusText: result.StatusText || 'SUCCESS',
-                Result: result.Result,
-                BizDuration: result.BizDuration || 3000,
-                SolveTime: result.SolveTime || 1500
-              }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-              });
-              
-            } catch (aliyunError) {
-              console.error('❌ 阿里云查询失败:', aliyunError);
-              
-              // 如果查询失败，返回备用结果
-              return new Response(JSON.stringify({
-                StatusText: 'SUCCESS',
-                Result: '抱歉，识别结果暂时无法获取，请稍后重试。',
-                BizDuration: 3000,
-                SolveTime: 1500,
-                warning: '查询失败，使用备用结果',
-                aliyunError: aliyunError.message
-              }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-              });
-            }
-            
-          } else {
+
+          if (!fileLink) {
             return new Response(JSON.stringify({
-              error: '不支持的操作类型',
-              supportedActions: ['submit', 'query']
+              error: '缺少音频文件链接'
             }), {
               status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // 创建OpenAI Whisper客户端
+          const whisperClient = new OpenAIWhisperClient(openaiApiKey);
+          
+          console.log('📤 开始 OpenAI Whisper 语音识别，文件链接:', fileLink);
+          
+          try {
+            // 直接调用 Whisper API 进行识别
+            const startTime = Date.now();
+            const result = await whisperClient.transcribeAudio(fileLink, {
+              language: language || undefined,
+              prompt: prompt || undefined
+            });
+            
+            const endTime = Date.now();
+            const processingTime = endTime - startTime;
+            
+            console.log('✅ OpenAI Whisper 识别成功:', result);
+            
+            return new Response(JSON.stringify({
+              success: true,
+              text: result.text,
+              language: result.language,
+              processingTime: processingTime,
+              provider: 'OpenAI Whisper'
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+            
+          } catch (whisperError) {
+            console.error('❌ OpenAI Whisper 识别失败:', whisperError);
+            
+            // 如果 Whisper API 失败，返回错误信息
+            return new Response(JSON.stringify({
+              success: false,
+              error: whisperError.message,
+              provider: 'OpenAI Whisper',
+              fallback: '语音识别暂时不可用，请稍后重试'
+            }), {
+              status: 500,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
           }
           
         } catch (error) {
-          console.error('❌ 阿里云 ASR 处理异常:', error);
+          console.error('❌ OpenAI Whisper ASR 处理异常:', error);
           return new Response(JSON.stringify({
-            error: error.message || 'ASR 处理失败',
-            action: 'fallback',
-            result: '抱歉，语音识别暂时不可用，请稍后重试。'
+            success: false,
+            error: error.message || 'Whisper ASR 处理失败',
+            provider: 'OpenAI Whisper',
+            fallback: '抱歉，语音识别暂时不可用，请稍后重试。'
           }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -853,7 +601,7 @@ export default {
       // Default response
       return new Response(JSON.stringify({
         message: "AI Chat API is running",
-        endpoints: ["/chat/save", "/chat/load/{id}", "/speech/stt", "/speech/tts", "/r2-upload", "/aliyun-asr", "/health"]
+        endpoints: ["/chat/save", "/chat/load/{id}", "/speech/stt", "/speech/tts", "/r2-upload", "/whisper-asr", "/health"]
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });

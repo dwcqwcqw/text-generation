@@ -15,7 +15,10 @@ const R2_CONFIG = {
 
 // API配置 (备用)
 const API_CONFIG = {
-  baseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000', // 本地开发时的默认地址
+  baseUrl: process.env.NEXT_PUBLIC_API_URL || 
+           process.env.NODE_ENV === 'development' 
+             ? 'http://localhost:8000'  // 开发环境
+             : 'https://text-generation.faceswap.workers.dev', // 生产环境，与您的Worker域名匹配
   endpoints: {
     saveChat: '/chat/save',
     loadChat: '/chat/load',
