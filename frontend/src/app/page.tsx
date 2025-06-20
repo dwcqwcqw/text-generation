@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Send, Bot, User, Search, Plus, ChevronDown, MessageSquare, RefreshCw, Settings, Save, Download, Trash2, History } from 'lucide-react'
+import { Send, Bot, User, Search, Plus, ChevronDown, MessageSquare, RefreshCw, Settings, Save, Download, Trash2, History, Mic, MicOff, Volume2, VolumeX, Loader2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { autoSaveChatHistory, exportChatAsJSON, loadChatFromR2, listUserChats, deleteChatFromR2 } from '../../lib/r2-storage'
 
@@ -67,6 +67,12 @@ export default function ChatPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false)
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([])
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null)
 
   // 强制验证模型数量
   useEffect(() => {
@@ -957,6 +963,169 @@ export default function ChatPage() {
     }
   }
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000
+        } 
+      });
+      
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
+      const chunks: Blob[] = [];
+      
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+      
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        await processVoiceInput(audioBlob);
+        
+        // 停止音频流
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      recorder.start();
+      setMediaRecorder(recorder);
+      setAudioChunks(chunks);
+      setIsRecording(true);
+      
+      console.log('🎤 开始录音...');
+    } catch (error) {
+      console.error('❌ 录音启动失败:', error);
+      alert('录音功能需要麦克风权限，请允许访问后重试');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      setIsProcessingVoice(true);
+      console.log('⏹️ 停止录音，开始处理...');
+    }
+  };
+
+  const processVoiceInput = async (audioBlob: Blob) => {
+    try {
+      console.log('🎤 处理语音输入，大小:', audioBlob.size);
+      
+      // 转换为base64
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const binaryString = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
+      const base64Audio = btoa(binaryString);
+      
+      // 调用后端语音转文字API
+      const response = await fetch(`${process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : ''}/speech/stt`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          audio_data: base64Audio,
+          format: 'webm'
+        }),
+      });
+      
+      const result = await response.json();
+      console.log('📝 语音转文字结果:', result);
+      
+      if (result.success && result.text) {
+        // 将转录文本设置到输入框
+        setInputValue(result.text);
+        console.log('✅ 语音转文字成功:', result.text);
+      } else {
+        console.error('❌ 语音转文字失败:', result.error);
+        alert(result.error || '语音识别失败，请重试');
+      }
+    } catch (error) {
+      console.error('❌ 语音处理异常:', error);
+      alert('语音处理失败，请检查网络连接');
+    } finally {
+      setIsProcessingVoice(false);
+    }
+  };
+
+  const playTextToSpeech = async (text: string) => {
+    try {
+      console.log('🔊 开始文字转语音:', text.substring(0, 50) + '...');
+      setIsPlayingAudio(true);
+      
+      // 停止当前播放的音频
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      }
+      
+      // 调用后端文字转语音API
+      const response = await fetch(`${process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : ''}/speech/tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text,
+          voice_id: 'female-shaonv',  // 可以根据需要调整
+          speed: 1.0,
+          volume: 1.0,
+          pitch: 0
+        }),
+      });
+      
+      const result = await response.json();
+      console.log('🎵 文字转语音结果:', result);
+      
+      if (result.success && result.audio_data) {
+        // 将base64音频数据转换为音频文件并播放
+        const audioBytes = Uint8Array.from(atob(result.audio_data), c => c.charCodeAt(0));
+        const audioBlob = new Blob([audioBytes], { type: 'audio/mp3' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        const audio = new Audio(audioUrl);
+        setCurrentAudio(audio);
+        
+        audio.onended = () => {
+          setIsPlayingAudio(false);
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        audio.onerror = (error) => {
+          console.error('❌ 音频播放失败:', error);
+          setIsPlayingAudio(false);
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        await audio.play();
+        console.log('✅ 开始播放语音');
+      } else {
+        console.error('❌ 文字转语音失败:', result.error);
+        alert(result.error || '语音合成失败，请重试');
+        setIsPlayingAudio(false);
+      }
+    } catch (error) {
+      console.error('❌ 文字转语音异常:', error);
+      alert('语音合成失败，请检查网络连接');
+      setIsPlayingAudio(false);
+    }
+  };
+
+  const stopAudio = () => {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      setIsPlayingAudio(false);
+    }
+  };
+
   return (
     <div className="h-screen flex bg-white">
       {/* 左侧边栏 - 按照截图样式 */}
@@ -1323,10 +1492,35 @@ export default function ChatPage() {
                     {message.role === 'user' ? (
                       <p className="whitespace-pre-wrap">{message.content}</p>
                     ) : (
-                      <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700">
-                        <ReactMarkdown>
-                          {message.content.replace(/\\n/g, '\n')}
-                        </ReactMarkdown>
+                      <div>
+                        <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700">
+                          <ReactMarkdown>
+                            {message.content.replace(/\\n/g, '\n')}
+                          </ReactMarkdown>
+                        </div>
+                        
+                        {/* AI消息的语音播放按钮 */}
+                        <div className="mt-3 flex items-center gap-2">
+                          <button
+                            onClick={() => isPlayingAudio ? stopAudio() : playTextToSpeech(message.content)}
+                            disabled={isProcessingVoice}
+                            className={`p-1.5 rounded-full transition-colors ${
+                              isPlayingAudio 
+                                ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            } ${isProcessingVoice ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            title={isPlayingAudio ? '停止播放' : '播放语音'}
+                          >
+                            {isPlayingAudio ? (
+                              <VolumeX className="h-3 w-3" />
+                            ) : (
+                              <Volume2 className="h-3 w-3" />
+                            )}
+                          </button>
+                          <span className="text-xs text-gray-500">
+                            {isPlayingAudio ? '正在播放...' : '语音播放'}
+                          </span>
+                        </div>
                       </div>
                     )}
                     
@@ -1369,39 +1563,81 @@ export default function ChatPage() {
         </div>
 
         {/* 输入区域 */}
-        <div className="p-6 bg-white border-t border-gray-200">
-          <div className="max-w-4xl mx-auto">
-            <div className="relative">
-              <textarea
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="What's in your mind?"
-                className="w-full p-4 pr-14 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-500"
-                rows={1}
-                style={{ minHeight: '56px', maxHeight: '160px' }}
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!inputValue.trim() || isLoading}
-                className="absolute right-2 bottom-2 p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <Send size={18} />
-              </button>
+        <div className="p-4 bg-gray-50 border-t">
+            <div className="flex gap-2 items-end">
+                <div className="flex-1 relative">
+                    <textarea
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                handleSendMessage()
+                            }
+                        }}
+                        placeholder="输入你的问题..."
+                        className="w-full p-3 pr-16 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows={1}
+                        style={{
+                            minHeight: '48px',
+                            maxHeight: '120px',
+                            height: 'auto'
+                        }}
+                        disabled={isLoading}
+                    />
+                    
+                    {/* 语音录制按钮 */}
+                    <button
+                        onClick={isRecording ? stopRecording : startRecording}
+                        disabled={isLoading || isProcessingVoice}
+                        className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-colors ${
+                            isRecording 
+                                ? 'bg-red-500 text-white hover:bg-red-600' 
+                                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                        } ${(isLoading || isProcessingVoice) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        title={isRecording ? '停止录音' : '开始语音输入'}
+                    >
+                        {isProcessingVoice ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : isRecording ? (
+                            <MicOff className="h-4 w-4" />
+                        ) : (
+                            <Mic className="h-4 w-4" />
+                        )}
+                    </button>
+                </div>
+                
+                <button
+                    onClick={handleSendMessage}
+                    disabled={isLoading || !inputValue.trim() || isRecording || isProcessingVoice}
+                    className={`p-3 rounded-lg transition-colors ${
+                        isLoading || !inputValue.trim() || isRecording || isProcessingVoice
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer'
+                    }`}
+                >
+                    {isLoading ? (
+                        <RefreshCw className="h-5 w-5 animate-spin" />
+                    ) : (
+                        <Send className="h-5 w-5" />
+                    )}
+                </button>
             </div>
             
-            <div className="mt-3 flex items-center justify-between">
-              <div className="text-xs text-gray-500">
-                Using {selectedModel.name} • Press Enter to send, Shift+Enter for new line
-              </div>
-              <button
-                onClick={testApiKeyDirect}
-                className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
-              >
-                🧪 Test API
-              </button>
-            </div>
-          </div>
+            {/* 录音状态提示 */}
+            {isRecording && (
+                <div className="mt-2 flex items-center gap-2 text-red-500 text-sm">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <span>正在录音，点击停止按钮结束录音</span>
+                </div>
+            )}
+            
+            {isProcessingVoice && (
+                <div className="mt-2 flex items-center gap-2 text-blue-500 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>正在处理语音，请稍候...</span>
+                </div>
+            )}
         </div>
       </div>
     </div>

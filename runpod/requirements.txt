@@ -7,4 +7,11 @@ accelerate>=0.20.0
 # llama-cpp-python 将在Dockerfile中单独安装GPU版本
 GPUtil>=1.4.0
 psutil>=5.9.0
-numpy>=1.24.0 
+numpy>=1.24.0
+bitsandbytes
+peft
+datasets
+httpx
+openai-whisper
+ffmpeg-python
+pydub 

@@ -10,7 +10,9 @@ import logging
 import time
 import subprocess
 import json
-from typing import Optional, Dict, Any, Tuple, List
+import base64
+import tempfile
+from typing import Optional, Dict, Any, Tuple, List, Union
 from pathlib import Path
 
 # 配置日志
@@ -25,6 +27,8 @@ logger = logging.getLogger(__name__)
 model = None
 model_type = None
 model_path = None
+whisper_model = None
+whisper_model_path = ""
 
 # 强制设置CUDA环境变量
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -346,81 +350,202 @@ def generate_response(prompt: str, persona: str = "default", history: list = Non
         logger.error(f"❌ 生成响应失败: {e}")
         return f"抱歉，生成响应时出现错误: {str(e)}"
 
-def handler(event):
-    """RunPod处理函数 - 支持流式响应和对话历史"""
-    global model, model_path
+def load_whisper_model(model_path: str):
+    """加载Whisper模型"""
+    global whisper_model, whisper_model_path
     
     try:
-        logger.info("🎯 Handler调用")
-        logger.info(f"📥 完整事件: {json.dumps(event, indent=2, ensure_ascii=False)}")
+        logger.info(f"🎤 开始加载Whisper模型: {model_path}")
         
-        # 获取输入
-        input_data = event.get("input", {})
-        prompt = input_data.get("prompt", "").strip()
-        persona = input_data.get("system_template", input_data.get("persona", "default"))
-        requested_model_path = input_data.get("model_path", "")  # 前端指定的模型路径
-        history = input_data.get("history", [])  # 对话历史
-        stream = input_data.get("stream", False)  # 是否启用流式响应
+        # 检查模型文件是否存在
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Whisper模型文件不存在: {model_path}")
         
-        logger.info(f"📝 提取的提示词: '{prompt}'")
-        logger.info(f"👤 人格设置: '{persona}'")
-        logger.info(f"🎯 请求的模型: '{requested_model_path}'")
-        logger.info(f"🌊 流式响应: {stream}")
+        # 导入whisper相关库
+        try:
+            import whisper
+            logger.info("✅ Whisper库加载成功")
+        except ImportError:
+            logger.error("❌ Whisper库未安装，请安装: pip install openai-whisper")
+            raise
         
-        if not prompt:
-            # RunPod格式的错误响应
-            error_result = {
-                "status": "FAILED",
-                "error": "请提供有效的提示词",
-                "output": None
-            }
-            logger.error(f"❌ 无效输入，返回: {json.dumps(error_result, ensure_ascii=False)}")
-            return error_result
+        # 加载模型
+        whisper_model = whisper.load_model(model_path)
+        whisper_model_path = model_path
         
-        # 检查是否需要切换模型
-        if requested_model_path and requested_model_path != model_path:
-            logger.info(f"🔄 需要切换模型: {model_path} -> {requested_model_path}")
-            model = None  # 重置模型，强制重新加载
-            model_path = requested_model_path
-        
-        # 初始化模型（如果需要）
-        if not model:
-            logger.info("🔄 模型未初始化，开始初始化...")
-            initialize_model()
-        
-        # 生成响应，包含历史记录
-        response = generate_response(prompt, persona, history, stream)
-        
-        # 处理流式响应
-        if stream and hasattr(response, '__iter__'):
-            # 对于流式响应，我们需要收集所有chunks并返回完整响应
-            # 因为RunPod serverless不直接支持流式响应
-            full_response = ""
-            for chunk in response:
-                full_response += chunk
-            response = full_response
-        
-        # 返回RunPod标准格式
-        result = {
-            "status": "COMPLETED",  # 前端期望的状态
-            "output": response,     # 前端期望的输出字段
-            "model_info": f"模型: {os.path.basename(model_path) if model_path else 'unknown'}",
-            "stream": stream        # 标记是否为流式响应
-        }
-        
-        logger.info(f"✅ 最终返回结果: {json.dumps(result, indent=2, ensure_ascii=False)}")
-        return result
+        logger.info(f"✅ Whisper模型加载成功: {os.path.basename(model_path)}")
+        return True
         
     except Exception as e:
-        logger.error(f"❌ Handler错误: {e}")
-        # RunPod格式的错误响应
-        error_result = {
-            "status": "FAILED",
-            "error": f"处理请求时出现错误: {str(e)} 😔",
-            "output": None
+        logger.error(f"❌ Whisper模型加载失败: {e}")
+        whisper_model = None
+        return False
+
+def transcribe_audio(audio_data: str, audio_format: str = "webm", language: str = "auto") -> str:
+    """使用Whisper进行语音转文字"""
+    global whisper_model
+    
+    try:
+        if not whisper_model:
+            raise Exception("Whisper模型未加载")
+        
+        logger.info(f"🎤 开始语音转文字，格式: {audio_format}, 语言: {language}")
+        
+        # 解码base64音频数据
+        audio_bytes = base64.b64decode(audio_data)
+        logger.info(f"📊 音频数据大小: {len(audio_bytes)} bytes")
+        
+        # 创建临时文件
+        with tempfile.NamedTemporaryFile(suffix=f'.{audio_format}', delete=False) as temp_file:
+            temp_file.write(audio_bytes)
+            temp_file_path = temp_file.name
+        
+        try:
+            # 使用Whisper进行转录
+            if language == "auto":
+                result = whisper_model.transcribe(temp_file_path)
+            else:
+                result = whisper_model.transcribe(temp_file_path, language=language)
+            
+            # 提取转录文本
+            transcription = result.get("text", "").strip()
+            detected_language = result.get("language", "unknown")
+            
+            logger.info(f"✅ 语音转文字成功: '{transcription}' (检测语言: {detected_language})")
+            return transcription
+            
+        finally:
+            # 清理临时文件
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+                
+    except Exception as e:
+        logger.error(f"❌ 语音转文字失败: {e}")
+        raise e
+
+def handler(event):
+    """RunPod处理函数 - 支持流式响应、对话历史和语音转文字"""
+    try:
+        input_data = event.get("input", {})
+        logger.info(f"📥 收到请求: {input_data}")
+        
+        # 检查是否为语音转文字请求
+        if "audio_data" in input_data:
+            return handle_speech_to_text(input_data)
+        
+        # 原有的文本生成逻辑
+        return handle_text_generation(input_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Handler处理异常: {e}")
+        return {
+            "error": f"处理请求时发生错误: {str(e)}"
         }
-        logger.error(f"❌ 错误返回: {json.dumps(error_result, ensure_ascii=False)}")
-        return error_result
+
+def handle_speech_to_text(input_data):
+    """处理语音转文字请求"""
+    try:
+        # 获取请求参数
+        audio_data = input_data.get("audio_data")
+        audio_format = input_data.get("format", "webm")
+        model_path = input_data.get("model_path", "/runpod-volume/voice/whisper-large-v3-turbo")
+        language = input_data.get("language", "auto")
+        task = input_data.get("task", "transcribe")  # transcribe 或 translate
+        
+        if not audio_data:
+            return {"error": "缺少音频数据"}
+        
+        # 加载Whisper模型（如果尚未加载）
+        global whisper_model, whisper_model_path
+        if not whisper_model or whisper_model_path != model_path:
+            logger.info(f"🔄 切换或加载Whisper模型: {model_path}")
+            if not load_whisper_model(model_path):
+                return {"error": "Whisper模型加载失败"}
+        
+        # 执行语音转文字
+        try:
+            transcription = transcribe_audio(audio_data, audio_format, language)
+            
+            if not transcription:
+                return {"error": "未检测到语音内容"}
+            
+            # 如果任务是翻译且检测到非英语，进行翻译
+            if task == "translate" and language != "en":
+                # 这里可以添加翻译逻辑，或者让Whisper直接翻译
+                import whisper
+                result = whisper_model.transcribe(
+                    temp_file_path, 
+                    task="translate"  # 翻译到英语
+                )
+                transcription = result.get("text", "").strip()
+            
+            return {
+                "text": transcription,
+                "transcription": transcription,  # 兼容不同字段名
+                "detected_language": language,
+                "task": task
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ 语音转文字处理失败: {e}")
+            return {"error": f"语音转文字失败: {str(e)}"}
+            
+    except Exception as e:
+        logger.error(f"❌ 语音转文字请求处理异常: {e}")
+        return {"error": f"请求处理异常: {str(e)}"}
+
+def handle_text_generation(input_data):
+    """处理文本生成请求（原有逻辑）"""
+    try:
+        # 获取参数
+        query = input_data.get("prompt", "")
+        user_message = input_data.get("user_message", query)
+        conversation_history = input_data.get("conversation_history", [])
+        max_length = input_data.get("max_length", 1024)
+        max_tokens = input_data.get("max_tokens", 2048)
+        temperature = input_data.get("temperature", 0.7)
+        top_p = input_data.get("top_p", 0.9)
+        stream = input_data.get("stream", False)
+        model_name = input_data.get("model", "llama")
+        persona = input_data.get("persona", "default")
+        
+        if not user_message.strip():
+            return {"error": "用户消息不能为空"}
+        
+        # 确保模型已加载
+        success, message = ensure_model_loaded(model_name)
+        if not success:
+            return {"error": message}
+        
+        # 构建对话历史
+        messages = []
+        
+        # 添加系统提示
+        system_prompt = get_system_prompt(persona)
+        messages.append({"role": "system", "content": system_prompt})
+        
+        # 添加历史对话
+        for msg in conversation_history[-10:]:  # 限制历史长度
+            if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                messages.append(msg)
+        
+        # 添加当前用户消息
+        messages.append({"role": "user", "content": user_message})
+        
+        logger.info(f"🤖 开始生成回复，模型: {model_name}, 用户消息: {user_message[:100]}...")
+        
+        # 生成回复
+        if stream:
+            return generate_streaming_response(messages, max_tokens, temperature, top_p)
+        else:
+            response = generate_response(messages, max_tokens, temperature, top_p)
+            return {"response": response, "success": True}
+            
+    except Exception as e:
+        logger.error(f"❌ 文本生成处理异常: {e}")
+        return {"error": f"生成回复时发生错误: {str(e)}"}
 
 if __name__ == "__main__":
     logger.info("🚀 启动GPU优化RunPod handler...")
