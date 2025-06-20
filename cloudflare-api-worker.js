@@ -623,6 +623,80 @@ export default {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
           }
+
+          // 调试Keys端点
+          if (action === 'debug_keys') {
+            try {
+              console.log('🔧 调试阿里云 Keys...');
+              
+              // 验证配置
+              if (!accessKeyId || !accessKeySecret || !appKey) {
+                return new Response(JSON.stringify({
+                  success: false,
+                  configStatus: {
+                    accessKeyId: !!accessKeyId,
+                    accessKeySecret: !!accessKeySecret,
+                    appKey: !!appKey
+                  },
+                  error: '阿里云配置缺失',
+                  message: '请检查环境变量设置'
+                }), {
+                  status: 400,
+                  headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+              }
+
+              // 尝试调用阿里云 API 进行测试
+              const aliyunClient = new AliyunNLSClient(accessKeyId, accessKeySecret);
+              const testFileLink = fileLink || 'https://pub-f314a707297b4748936925bba8dd4962.r2.dev/test_voice_20250521_152935.wav';
+              
+              try {
+                console.log('🧪 测试阿里云 API 调用...');
+                const result = await aliyunClient.submitFileTranscriptionTask(appKey, testFileLink, false);
+                
+                return new Response(JSON.stringify({
+                  success: true,
+                  configStatus: {
+                    accessKeyId: true,
+                    accessKeySecret: true,
+                    appKey: true
+                  },
+                  aliyunTest: 'success',
+                  result: result,
+                  message: '阿里云 API 调用成功'
+                }), {
+                  headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+                
+              } catch (aliyunError) {
+                console.error('❌ 阿里云 API 测试失败:', aliyunError);
+                
+                return new Response(JSON.stringify({
+                  success: false,
+                  configStatus: {
+                    accessKeyId: true,
+                    accessKeySecret: true,
+                    appKey: true
+                  },
+                  aliyunTest: 'failed',
+                  aliyunError: aliyunError.message,
+                  message: '阿里云 API 调用失败，但配置已设置'
+                }), {
+                  headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+              }
+              
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: error.message,
+                message: '调试过程出错'
+              }), {
+                status: 500,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              });
+            }
+          }
           
           // 验证必要参数
           if (!accessKeyId || !accessKeySecret || !appKey) {
