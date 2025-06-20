@@ -1041,20 +1041,6 @@ export default function ChatPage() {
       // 调用阿里云录音文件识别 API
       console.log('🚀 调用阿里云语音识别...');
       
-      const aliyunPayload = {
-        accessKeyId: process.env.NEXT_PUBLIC_ALIYUN_ACCESS_KEY_ID,
-        accessKeySecret: process.env.NEXT_PUBLIC_ALIYUN_ACCESS_KEY_SECRET,
-        appKey: process.env.NEXT_PUBLIC_ALIYUN_APP_KEY,
-        fileLink: audioUrl,
-        version: '4.0',
-        enableWords: false
-      };
-      
-      // 验证必要的环境变量
-      if (!aliyunPayload.accessKeyId || !aliyunPayload.accessKeySecret || !aliyunPayload.appKey) {
-        throw new Error('阿里云 ASR 配置缺失，请设置环境变量');
-      }
-      
       // 提交识别任务 - 使用 Cloudflare Workers API
       const asrApiUrl = process.env.NODE_ENV === 'development' 
         ? 'http://localhost:8000/aliyun-asr'  // 开发环境
@@ -1067,7 +1053,7 @@ export default function ChatPage() {
         },
         body: JSON.stringify({
           action: 'submit',
-          ...aliyunPayload
+          fileLink: audioUrl
         }),
       });
       
@@ -1102,8 +1088,6 @@ export default function ChatPage() {
           },
           body: JSON.stringify({
             action: 'query',
-            accessKeyId: aliyunPayload.accessKeyId,
-            accessKeySecret: aliyunPayload.accessKeySecret,
             taskId: taskId
           }),
         });

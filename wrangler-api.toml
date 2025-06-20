@@ -10,6 +10,10 @@ MINIMAX_GROUP_ID = "1925025302392607036"
 R2_ACCOUNT_ID = "c7c141ce43d175e60601edc46d904553"
 R2_ACCESS_KEY_ID = "5885b29961ce9fc2b593139d9de52f81"
 R2_SECRET_ACCESS_KEY = "a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a27593d181"
+# 阿里云配置 - 请在 Cloudflare Workers 环境变量中设置
+# ALIYUN_ACCESS_KEY_ID = "your_access_key_id"
+# ALIYUN_ACCESS_KEY_SECRET = "your_access_key_secret" 
+# ALIYUN_APP_KEY = "your_app_key"
 
 [[env.production.r2_buckets]]
 binding = "R2_BUCKET"
@@ -23,6 +27,10 @@ MINIMAX_GROUP_ID = "1925025302392607036"
 R2_ACCOUNT_ID = "c7c141ce43d175e60601edc46d904553"
 R2_ACCESS_KEY_ID = "5885b29961ce9fc2b593139d9de52f81"
 R2_SECRET_ACCESS_KEY = "a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a27593d181"
+# 阿里云配置 - 请在 Cloudflare Workers 环境变量中设置  
+# ALIYUN_ACCESS_KEY_ID = "your_access_key_id"
+# ALIYUN_ACCESS_KEY_SECRET = "your_access_key_secret" 
+# ALIYUN_APP_KEY = "your_app_key"
 
 [[env.development.r2_buckets]]
 binding = "R2_BUCKET"
