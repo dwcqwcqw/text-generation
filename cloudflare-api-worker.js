@@ -66,10 +66,15 @@ class ChatHistoryManager {
   async getShortTermMemory(userId, conversationId) {
     try {
       const kvKey = `chat:${userId}:${conversationId}`;
+      if (!this.env.KV) {
+        console.log('⚠️ KV命名空间未绑定，返回空数组');
+        return [];
+      }
+      
       const history = await this.env.KV.get(kvKey, { type: 'json' });
       return history || [];
     } catch (error) {
-      console.error('获取短期记忆失败:', error);
+      console.error('❌ 获取短期记忆失败:', error);
       return [];
     }
   }
@@ -80,10 +85,16 @@ class ChatHistoryManager {
       const kvKey = `chat:${userId}:${conversationId}`;
       // 只保留最近5轮对话
       const recentMessages = messages.slice(-10); // 5轮 = 10条消息 (用户+助手)
+      
+      if (!this.env.KV) {
+        throw new Error('KV命名空间未绑定');
+      }
+      
       await this.env.KV.put(kvKey, JSON.stringify(recentMessages));
+      
       return { success: true };
     } catch (error) {
-      console.error('更新短期记忆失败:', error);
+      console.error('❌ 更新短期记忆失败:', error);
       return { success: false, error: error.message };
     }
   }
@@ -658,6 +669,8 @@ export default {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
+
+
       
       // Save chat
       if (path === '/chat/save' && request.method === 'POST') {
