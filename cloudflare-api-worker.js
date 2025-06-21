@@ -794,10 +794,10 @@ export default {
         }
       }
       
-      // Text to Speech endpoint (proxy to MiniMax)
+      // Text to Speech endpoint (多语种支持)
       if (path === '/speech/tts' && request.method === 'POST') {
         const body = await request.json();
-        const { text, voice_id = 'female-shaonv', speed = 1.0, volume = 1.0, pitch = 0 } = body;
+        const { text, voice_id = 'female-shaonv', speed = 1.0, volume = 1.0, pitch = 0, language = 'auto' } = body;
         
         if (!text || !text.trim()) {
           return new Response(JSON.stringify({
@@ -808,28 +808,91 @@ export default {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        
-        // MiniMax TTS API
-        const minimaxUrl = `https://api.minimax.io/v1/t2a_v2?GroupId=${env.MINIMAX_GROUP_ID || '1925025302392607036'}`;
-        const minimaxPayload = {
-          model: "speech-02-turbo",
-          text: text,
-          stream: false,
-          voice_setting: {
-            voice_id,
-            speed,
-            vol: volume,
-            pitch
-          },
-          audio_setting: {
-            sample_rate: 32000,
-            bitrate: 128000,
-            format: "mp3",
-            channel: 1
+
+        // 文本预处理和语言检测
+        function preprocessText(inputText) {
+          // 移除或替换可能导致问题的特殊字符
+          let cleanText = inputText
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // 移除控制字符
+            .replace(/[^\u0020-\u007E\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]/g, '') // 只保留基本拉丁字符、中文、日文
+            .replace(/\s+/g, ' ') // 规范化空格
+            .trim();
+          
+          // 限制文本长度（MiniMax限制）
+          if (cleanText.length > 2000) {
+            cleanText = cleanText.substring(0, 2000) + '...';
           }
-        };
-        
+          
+          return cleanText;
+        }
+
+        function detectLanguage(inputText) {
+          // 简单的语言检测
+          const chineseRegex = /[\u4e00-\u9fff]/;
+          const japaneseRegex = /[\u3040-\u309f\u30a0-\u30ff]/;
+          const koreanRegex = /[\uac00-\ud7af]/;
+          
+          if (chineseRegex.test(inputText)) return 'zh';
+          if (japaneseRegex.test(inputText)) return 'ja';
+          if (koreanRegex.test(inputText)) return 'ko';
+          return 'en';
+        }
+
+        function selectVoiceForLanguage(lang, originalVoiceId) {
+          // 根据语言选择合适的声音
+          const voiceMap = {
+            'zh': ['female-shaonv', 'male-qn-qingse', 'female-yujie', 'male-badao'],
+            'en': ['female-shaonv', 'male-qn-qingse'], // MiniMax主要支持中文，英文使用相同声音
+            'ja': ['female-shaonv', 'female-yujie'],
+            'ko': ['female-shaonv', 'female-yujie']
+          };
+          
+          const availableVoices = voiceMap[lang] || voiceMap['zh'];
+          return availableVoices.includes(originalVoiceId) ? originalVoiceId : availableVoices[0];
+        }
+
         try {
+          // 预处理文本
+          const processedText = preprocessText(text);
+          
+          if (!processedText) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: '处理后的文本为空，请检查输入内容'
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // 检测语言
+          const detectedLang = language === 'auto' ? detectLanguage(processedText) : language;
+          
+          // 选择合适的声音
+          const selectedVoice = selectVoiceForLanguage(detectedLang, voice_id);
+
+          console.log(`TTS请求: 语言=${detectedLang}, 声音=${selectedVoice}, 文本长度=${processedText.length}`);
+
+          // 尝试MiniMax TTS API
+          const minimaxUrl = `https://api.minimax.io/v1/t2a_v2?GroupId=${env.MINIMAX_GROUP_ID || '1925025302392607036'}`;
+          const minimaxPayload = {
+            model: "speech-02-turbo",
+            text: processedText,
+            stream: false,
+            voice_setting: {
+              voice_id: selectedVoice,
+              speed: Math.max(0.5, Math.min(2.0, speed)), // 限制速度范围
+              vol: Math.max(0.1, Math.min(2.0, volume)),  // 限制音量范围
+              pitch: Math.max(-12, Math.min(12, pitch))    // 限制音调范围
+            },
+            audio_setting: {
+              sample_rate: 32000,
+              bitrate: 128000,
+              format: "mp3",
+              channel: 1
+            }
+          };
+
           const minimaxResponse = await fetch(minimaxUrl, {
             method: 'POST',
             headers: {
@@ -838,39 +901,88 @@ export default {
             },
             body: JSON.stringify(minimaxPayload)
           });
-          
+
           if (minimaxResponse.ok) {
             const result = await minimaxResponse.json();
             
             if (result.data && result.data.audio) {
-              // Convert hex audio to binary
-              const hexAudio = result.data.audio;
-              const audioBytes = new Uint8Array(hexAudio.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-              
-              // Return actual audio file
-              return new Response(audioBytes, {
-                headers: { 
-                  ...corsHeaders, 
-                  'Content-Type': 'audio/mpeg',
-                  'Content-Disposition': 'inline; filename="speech.mp3"'
-                }
-              });
+              try {
+                // Convert hex audio to binary
+                const hexAudio = result.data.audio;
+                const audioBytes = new Uint8Array(hexAudio.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                
+                // Return actual audio file
+                return new Response(audioBytes, {
+                  headers: { 
+                    ...corsHeaders, 
+                    'Content-Type': 'audio/mpeg',
+                    'Content-Disposition': 'inline; filename="speech.mp3"',
+                    'X-TTS-Language': detectedLang,
+                    'X-TTS-Voice': selectedVoice
+                  }
+                });
+              } catch (hexError) {
+                console.error('音频数据转换失败:', hexError);
+                throw new Error('音频数据格式错误');
+              }
             } else {
-              return new Response(JSON.stringify({
-                success: false,
-                error: '音频生成失败'
-              }), {
-                status: 500,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-              });
+              console.error('MiniMax响应格式错误:', result);
+              throw new Error(result.message || '音频生成失败');
             }
           } else {
-            throw new Error(`MiniMax API error: ${minimaxResponse.status}`);
+            const errorText = await minimaxResponse.text();
+            console.error(`MiniMax API错误 ${minimaxResponse.status}:`, errorText);
+            
+            // 如果是字符编码错误，尝试OpenAI TTS作为备用
+            if (minimaxResponse.status === 400 && env.OPENAI_API_KEY) {
+              console.log('尝试OpenAI TTS备用方案...');
+              
+              try {
+                const openaiResponse = await fetch('https://api.openai.com/v1/audio/speech', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${env.OPENAI_API_KEY}`
+                  },
+                  body: JSON.stringify({
+                    model: 'tts-1',
+                    input: processedText,
+                    voice: 'alloy', // OpenAI支持的声音
+                    response_format: 'mp3',
+                    speed: speed
+                  })
+                });
+
+                if (openaiResponse.ok) {
+                  const audioBuffer = await openaiResponse.arrayBuffer();
+                  return new Response(audioBuffer, {
+                    headers: { 
+                      ...corsHeaders, 
+                      'Content-Type': 'audio/mpeg',
+                      'Content-Disposition': 'inline; filename="speech.mp3"',
+                      'X-TTS-Provider': 'openai',
+                      'X-TTS-Language': detectedLang
+                    }
+                  });
+                }
+              } catch (openaiError) {
+                console.error('OpenAI TTS备用方案也失败:', openaiError);
+              }
+            }
+            
+            throw new Error(`MiniMax API error: ${minimaxResponse.status} - ${errorText}`);
           }
         } catch (error) {
+          console.error('TTS服务异常:', error);
+          
           return new Response(JSON.stringify({
             success: false,
-            error: `语音合成服务异常: ${error.message}`
+            error: `语音合成服务异常: ${error.message}`,
+            details: {
+              originalText: text,
+              processedText: preprocessText(text),
+              detectedLanguage: detectLanguage(preprocessText(text))
+            }
           }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
