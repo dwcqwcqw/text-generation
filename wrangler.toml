@@ -19,6 +19,19 @@ R2_SECRET_ACCESS_KEY = "a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a2
 binding = "R2_BUCKET"
 bucket_name = "text-generation"
 
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "text-generation-db"
+database_id = "4732e877-3dce-471e-a7a2-4223ba1ee8b4"
+
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "8d7d05ffe00d4d0b9014448b456078bd"
+
+[[env.production.vectorize]]
+binding = "VECTORIZE"
+index_name = "text-generation-vectors"
+
 [env.development.vars]
 ENVIRONMENT = "development"
 RUNPOD_API_KEY = "rpa_YT0BFBFZYAZMQHR231H4DOKQEOAJXSMVIBDYN4ZQ1tdxlb"
@@ -34,4 +47,17 @@ R2_SECRET_ACCESS_KEY = "a4415c670e669229db451ea7b38544c0a2e44dbe630f1f35f99f28a2
 
 [[env.development.r2_buckets]]
 binding = "R2_BUCKET"
-bucket_name = "text-generation" 
+bucket_name = "text-generation"
+
+[[env.development.d1_databases]]
+binding = "DB"
+database_name = "text-generation-db"
+database_id = "4732e877-3dce-471e-a7a2-4223ba1ee8b4"
+
+[[env.development.kv_namespaces]]
+binding = "KV"
+id = "8d7d05ffe00d4d0b9014448b456078bd"
+
+[[env.development.vectorize]]
+binding = "VECTORIZE"
+index_name = "text-generation-vectors"

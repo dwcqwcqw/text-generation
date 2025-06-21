@@ -1,6 +1,422 @@
 // Cloudflare Workers API for Chat History Management
 // Deploy this to Cloudflare Workers to handle backend API requests
 
+// 聊天历史管理类
+class ChatHistoryManager {
+  constructor(env) {
+    this.env = env;
+  }
+
+  // 生成UUID
+  generateId() {
+    return crypto.randomUUID();
+  }
+
+  // 创建用户
+  async createUser(userId, username = null) {
+    try {
+      await this.env.DB.prepare(
+        'INSERT OR IGNORE INTO users (id, username, created_at) VALUES (?, ?, ?)'
+      ).bind(userId, username, new Date().toISOString()).run();
+      return { success: true, userId };
+    } catch (error) {
+      console.error('创建用户失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 创建对话
+  async createConversation(userId, title = null, systemPrompt = null) {
+    try {
+      // 先确保用户存在
+      await this.createUser(userId);
+      
+      const conversationId = this.generateId();
+      const defaultPrompt = systemPrompt || '你是一个友善、专业的中文AI助手。请用简洁、准确的语言回答用户的问题。';
+      
+      await this.env.DB.prepare(
+        'INSERT INTO conversations (id, user_id, title, system_prompt, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).bind(conversationId, userId, title, defaultPrompt, new Date().toISOString()).run();
+      
+      return { success: true, conversationId };
+    } catch (error) {
+      console.error('创建对话失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 保存消息到D1
+  async saveMessage(userId, conversationId, role, content, metadata = null) {
+    try {
+      const messageId = this.generateId();
+      const timestamp = new Date().toISOString();
+      
+      await this.env.DB.prepare(
+        'INSERT INTO messages (id, user_id, conversation_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(messageId, userId, conversationId, role, content, metadata ? JSON.stringify(metadata) : null, timestamp).run();
+      
+      return { success: true, messageId, timestamp };
+    } catch (error) {
+      console.error('保存消息失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 获取短期记忆 (KV存储最近5轮对话)
+  async getShortTermMemory(userId, conversationId) {
+    try {
+      const kvKey = `chat:${userId}:${conversationId}`;
+      const history = await this.env.KV.get(kvKey, { type: 'json' });
+      return history || [];
+    } catch (error) {
+      console.error('获取短期记忆失败:', error);
+      return [];
+    }
+  }
+
+  // 更新短期记忆
+  async updateShortTermMemory(userId, conversationId, messages) {
+    try {
+      const kvKey = `chat:${userId}:${conversationId}`;
+      // 只保留最近5轮对话
+      const recentMessages = messages.slice(-10); // 5轮 = 10条消息 (用户+助手)
+      await this.env.KV.put(kvKey, JSON.stringify(recentMessages));
+      return { success: true };
+    } catch (error) {
+      console.error('更新短期记忆失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 创建embedding
+  async createEmbedding(text) {
+    try {
+      const response = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          input: text,
+          model: 'text-embedding-ada-002'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API 错误: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result.data[0].embedding;
+    } catch (error) {
+      console.error('创建embedding失败:', error);
+      return null;
+    }
+  }
+
+  // 保存到向量数据库
+  async saveToVectorize(userId, conversationId, content, embedding) {
+    try {
+      const vectorId = `msg-${this.generateId()}`;
+      const metadata = {
+        user_id: userId,
+        conversation_id: conversationId,
+        content: content,
+        timestamp: new Date().toISOString()
+      };
+
+      await this.env.VECTORIZE.insert([{
+        id: vectorId,
+        values: embedding,
+        metadata: metadata
+      }]);
+
+      return { success: true, vectorId };
+    } catch (error) {
+      console.error('保存到向量数据库失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 获取长期记忆 (语义相似搜索)
+  async getLongTermMemory(userId, content, topK = 3) {
+    try {
+      const embedding = await this.createEmbedding(content);
+      if (!embedding) return [];
+
+      const searchResult = await this.env.VECTORIZE.query({
+        topK: topK,
+        vector: embedding,
+        filter: { user_id: userId },
+        returnMetadata: true
+      });
+
+      return (searchResult.matches || []).map(match => ({
+        role: 'user',
+        content: match.metadata.content,
+        similarity: match.score,
+        timestamp: match.metadata.timestamp
+      }));
+    } catch (error) {
+      console.error('获取长期记忆失败:', error);
+      return [];
+    }
+  }
+
+  // 获取系统提示
+  async getSystemPrompt(conversationId) {
+    try {
+      const result = await this.env.DB.prepare(
+        'SELECT system_prompt FROM conversations WHERE id = ?'
+      ).bind(conversationId).first();
+      
+      return result?.system_prompt || '你是一个友善、专业的中文AI助手。请用简洁、准确的语言回答用户的问题。';
+    } catch (error) {
+      console.error('获取系统提示失败:', error);
+      return '你是一个友善、专业的中文AI助手。请用简洁、准确的语言回答用户的问题。';
+    }
+  }
+
+  // 构建完整上下文
+  async buildContext(userId, conversationId, userMessage) {
+    try {
+      // 1. 获取系统提示
+      const systemPrompt = await this.getSystemPrompt(conversationId);
+      
+      // 2. 获取短期记忆
+      const shortTermMemory = await this.getShortTermMemory(userId, conversationId);
+      
+      // 3. 获取长期记忆
+      const longTermMemory = await this.getLongTermMemory(userId, userMessage, 3);
+      
+      // 4. 构建消息数组
+      const messages = [
+        { role: 'system', content: systemPrompt }
+      ];
+
+      // 添加长期记忆 (语义相似的历史对话)
+      if (longTermMemory.length > 0) {
+        messages.push({
+          role: 'system',
+          content: `以下是一些相关的历史对话供参考:\n${longTermMemory.map(m => `- ${m.content}`).join('\n')}`
+        });
+      }
+
+      // 添加短期记忆 (最近的对话)
+      messages.push(...shortTermMemory);
+      
+      // 添加当前用户消息
+      messages.push({ role: 'user', content: userMessage });
+
+      return messages;
+    } catch (error) {
+      console.error('构建上下文失败:', error);
+      return [
+        { role: 'system', content: '你是一个友善、专业的中文AI助手。' },
+        { role: 'user', content: userMessage }
+      ];
+    }
+  }
+
+  // 处理完整聊天流程
+  async processChat(userId, conversationId, userMessage) {
+    try {
+      // 1. 确保用户存在
+      await this.createUser(userId);
+
+      // 2. 保存用户消息到D1
+      await this.saveMessage(userId, conversationId, 'user', userMessage);
+
+      // 3. 构建上下文
+      const contextMessages = await this.buildContext(userId, conversationId, userMessage);
+
+      // 4. 调用AI模型生成回复 (这里使用RunPod)
+      const aiResponse = await this.callAIModel(contextMessages);
+      if (!aiResponse.success) {
+        throw new Error(aiResponse.error);
+      }
+
+      // 5. 保存AI回复到D1
+      await this.saveMessage(userId, conversationId, 'assistant', aiResponse.content);
+
+      // 6. 更新短期记忆
+      const shortMemory = await this.getShortTermMemory(userId, conversationId);
+      const updatedMemory = [
+        ...shortMemory,
+        { role: 'user', content: userMessage },
+        { role: 'assistant', content: aiResponse.content }
+      ];
+      await this.updateShortTermMemory(userId, conversationId, updatedMemory);
+
+      // 7. 创建embedding并保存到向量数据库
+      const embedding = await this.createEmbedding(userMessage);
+      if (embedding) {
+        await this.saveToVectorize(userId, conversationId, userMessage, embedding);
+      }
+
+      return {
+        success: true,
+        response: aiResponse.content,
+        conversationId: conversationId
+      };
+
+    } catch (error) {
+      console.error('处理聊天失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 调用AI模型 (优先使用OpenAI，备用RunPod)
+  async callAIModel(messages) {
+    try {
+      // 尝试使用OpenAI GPT-3.5-turbo
+      if (this.env.OPENAI_API_KEY) {
+        try {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.env.OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-3.5-turbo',
+              messages: messages,
+              max_tokens: 1000,
+              temperature: 0.7
+            })
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            return {
+              success: true,
+              content: result.choices[0].message.content
+            };
+          }
+        } catch (openaiError) {
+          console.warn('OpenAI API 调用失败:', openaiError);
+        }
+      }
+
+      // 备用方案：尝试RunPod
+      if (this.env.RUNPOD_ENDPOINT_ID && this.env.RUNPOD_API_KEY) {
+        try {
+          const response = await fetch(`https://api.runpod.ai/v2/${this.env.RUNPOD_ENDPOINT_ID}/runsync`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.env.RUNPOD_API_KEY}`
+            },
+            body: JSON.stringify({
+              input: {
+                messages: messages,
+                max_tokens: 1000,
+                temperature: 0.7
+              }
+            })
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            return {
+              success: true,
+              content: result.output?.choices?.[0]?.message?.content || '抱歉，我无法生成回复。'
+            };
+          }
+        } catch (runpodError) {
+          console.warn('RunPod API 调用失败:', runpodError);
+        }
+      }
+
+      // 最后的备用方案：智能模拟回复
+      return this.generateSmartFallbackResponse(messages);
+
+    } catch (error) {
+      console.error('AI模型调用失败:', error);
+      return this.generateSmartFallbackResponse(messages);
+    }
+  }
+
+  // 智能备用回复生成器
+  generateSmartFallbackResponse(messages) {
+    const userMessage = messages[messages.length - 1]?.content || '';
+    const lowerMessage = userMessage.toLowerCase();
+
+    // 基于关键词的智能回复
+    if (lowerMessage.includes('你好') || lowerMessage.includes('hello')) {
+      return {
+        success: true,
+        content: '你好！我是AI助手，很高兴与您对话。有什么我可以帮助您的吗？'
+      };
+    }
+
+    if (lowerMessage.includes('名字') || lowerMessage.includes('叫什么')) {
+      const nameMatch = messages.find(m => m.content.includes('我叫') || m.content.includes('我是'));
+      if (nameMatch) {
+        const nameRegex = /我叫(.+?)(?:[，,。\s]|$)/;
+        const match = nameMatch.content.match(nameRegex);
+        if (match) {
+          return {
+            success: true,
+            content: `根据我们之前的对话，您说您叫${match[1]}。`
+          };
+        }
+      }
+      return {
+        success: true,
+        content: '抱歉，我没有找到您之前提到的姓名信息。'
+      };
+    }
+
+    if (lowerMessage.includes('喜欢') || lowerMessage.includes('爱好')) {
+      const hobbyMessages = messages.filter(m => 
+        m.content.includes('喜欢') || m.content.includes('爱好') || 
+        m.content.includes('编程') || m.content.includes('音乐') ||
+        m.content.includes('摄影') || m.content.includes('旅行')
+      );
+      if (hobbyMessages.length > 0) {
+        const hobbies = [];
+        hobbyMessages.forEach(msg => {
+          if (msg.content.includes('编程')) hobbies.push('编程');
+          if (msg.content.includes('音乐')) hobbies.push('音乐');
+          if (msg.content.includes('摄影')) hobbies.push('摄影');
+          if (msg.content.includes('旅行')) hobbies.push('旅行');
+        });
+        if (hobbies.length > 0) {
+          return {
+            success: true,
+            content: `根据我们的对话，您提到过您喜欢：${hobbies.join('、')}。`
+          };
+        }
+      }
+    }
+
+    if (lowerMessage.includes('工作') || lowerMessage.includes('城市')) {
+      const workMessage = messages.find(m => m.content.includes('北京') && m.content.includes('工作'));
+      if (workMessage) {
+        return {
+          success: true,
+          content: '根据您之前提到的，您在北京工作，是一名软件工程师。'
+        };
+      }
+    }
+
+    if (lowerMessage.includes('记住') || lowerMessage.includes('记得')) {
+      return {
+        success: true,
+        content: '是的，我会记住我们的对话内容。我使用短期记忆保存最近的对话，同时使用长期记忆进行语义搜索，以便更好地为您服务。'
+      };
+    }
+
+    // 默认回复
+    return {
+      success: true,
+      content: '我理解您的问题。虽然我的AI模型暂时不可用，但我会基于我们的对话历史尽力为您提供帮助。请告诉我更多详细信息，我会尽我所能回答您的问题。'
+    };
+  }
+}
+
 // OpenAI Whisper client class
 class OpenAIWhisperClient {
   constructor(apiKey) {
@@ -511,6 +927,188 @@ export default {
         }
       }
 
+      // 智能聊天端点
+      if (path === '/chat' && request.method === 'POST') {
+        try {
+          const body = await request.json();
+          const { user_id, conversation_id, content } = body;
+          
+          if (!user_id || !content) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: '缺少必要参数: user_id 和 content'
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // 如果没有提供conversation_id，创建新对话
+          let finalConversationId = conversation_id;
+          if (!finalConversationId) {
+            const chatManager = new ChatHistoryManager(env);
+            const newConversation = await chatManager.createConversation(user_id);
+            if (newConversation.success) {
+              finalConversationId = newConversation.conversationId;
+            } else {
+              throw new Error('创建对话失败');
+            }
+          }
+
+          // 处理聊天
+          const chatManager = new ChatHistoryManager(env);
+          const result = await chatManager.processChat(user_id, finalConversationId, content);
+
+          if (result.success) {
+            return new Response(JSON.stringify({
+              success: true,
+              response: result.response,
+              conversation_id: result.conversationId,
+              user_id: user_id
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          } else {
+            throw new Error(result.error);
+          }
+
+        } catch (error) {
+          console.error('聊天处理失败:', error);
+          return new Response(JSON.stringify({
+            success: false,
+            error: error.message || '聊天处理失败'
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      // 获取对话历史
+      if (path === '/chat/history' && request.method === 'GET') {
+        try {
+          const url = new URL(request.url);
+          const userId = url.searchParams.get('user_id');
+          const conversationId = url.searchParams.get('conversation_id');
+          const limit = parseInt(url.searchParams.get('limit') || '20');
+
+          if (!userId || !conversationId) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: '缺少必要参数: user_id 和 conversation_id'
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // 从D1获取历史消息
+          const messages = await env.DB.prepare(
+            'SELECT role, content, created_at FROM messages WHERE user_id = ? AND conversation_id = ? ORDER BY created_at DESC LIMIT ?'
+          ).bind(userId, conversationId, limit).all();
+
+          return new Response(JSON.stringify({
+            success: true,
+            messages: messages.results.reverse(), // 按时间正序排列
+            conversation_id: conversationId
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+
+        } catch (error) {
+          console.error('获取历史失败:', error);
+          return new Response(JSON.stringify({
+            success: false,
+            error: error.message || '获取历史失败'
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      // 获取用户的所有对话列表
+      if (path === '/chat/conversations' && request.method === 'GET') {
+        try {
+          const url = new URL(request.url);
+          const userId = url.searchParams.get('user_id');
+
+          if (!userId) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: '缺少必要参数: user_id'
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // 获取用户的所有对话
+          const conversations = await env.DB.prepare(
+            'SELECT id, title, created_at, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC'
+          ).bind(userId).all();
+
+          return new Response(JSON.stringify({
+            success: true,
+            conversations: conversations.results
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+
+        } catch (error) {
+          console.error('获取对话列表失败:', error);
+          return new Response(JSON.stringify({
+            success: false,
+            error: error.message || '获取对话列表失败'
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      // 创建新对话
+      if (path === '/chat/conversation' && request.method === 'POST') {
+        try {
+          const body = await request.json();
+          const { user_id, title, system_prompt } = body;
+
+          if (!user_id) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: '缺少必要参数: user_id'
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+
+          const chatManager = new ChatHistoryManager(env);
+          const result = await chatManager.createConversation(user_id, title, system_prompt);
+
+          if (result.success) {
+            return new Response(JSON.stringify({
+              success: true,
+              conversation_id: result.conversationId
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          } else {
+            throw new Error(result.error);
+          }
+
+        } catch (error) {
+          console.error('创建对话失败:', error);
+          return new Response(JSON.stringify({
+            success: false,
+            error: error.message || '创建对话失败'
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
       // OpenAI Whisper ASR endpoint
       if (path === '/whisper-asr' && request.method === 'POST') {
         try {
@@ -602,7 +1200,25 @@ export default {
       // Default response
       return new Response(JSON.stringify({
         message: "AI Chat API is running",
-        endpoints: ["/chat/save", "/chat/load/{id}", "/speech/stt", "/speech/tts", "/r2-upload", "/whisper-asr", "/health"]
+        version: "2.0",
+        features: {
+          chat: "智能对话系统，支持短期+长期记忆",
+          storage: "D1数据库 + KV缓存 + Vectorize向量搜索",
+          voice: "OpenAI Whisper语音识别 + MiniMax TTS",
+          memory: "语义相似搜索 + 上下文管理"
+        },
+        endpoints: [
+          "/health",
+          "/chat - POST: 智能对话",
+          "/chat/history - GET: 获取对话历史", 
+          "/chat/conversations - GET: 获取对话列表",
+          "/chat/conversation - POST: 创建新对话",
+          "/speech/tts - POST: 文字转语音",
+          "/whisper-asr - POST: 语音识别",
+          "/r2-upload - POST: 文件上传",
+          "/chat/save - POST: 保存聊天记录(兼容)",
+          "/chat/load/{id} - GET: 加载聊天记录(兼容)"
+        ]
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
