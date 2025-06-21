@@ -267,12 +267,77 @@ class ChatHistoryManager {
     }
   }
 
-  // 调用AI模型 (优先使用OpenAI，备用RunPod)
+  // 调用AI模型 (优先使用RunPod，备用OpenAI)
   async callAIModel(messages) {
     try {
-      // 尝试使用OpenAI GPT-3.5-turbo
+      // 主要方案：使用RunPod自有模型
+      if (this.env.RUNPOD_API_KEY) {
+        try {
+          // 尝试使用配置的endpoint ID
+          let endpointId = this.env.RUNPOD_ENDPOINT_ID;
+          
+          // 如果没有配置endpoint ID，尝试从API key推断或使用默认值
+          if (!endpointId) {
+            console.warn('未配置RUNPOD_ENDPOINT_ID，尝试使用默认endpoint');
+            // 这里可以设置一个默认的endpoint ID或者从其他地方获取
+          }
+
+          const runpodUrl = endpointId 
+            ? `https://api.runpod.ai/v2/${endpointId}/runsync`
+            : `https://api.runpod.ai/v2/runsync`; // 备用URL格式
+
+          const response = await fetch(runpodUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.env.RUNPOD_API_KEY}`
+            },
+            body: JSON.stringify({
+              input: {
+                messages: messages,
+                max_tokens: 1000,
+                temperature: 0.7,
+                model: "llama-3.1-8b-instruct", // 或者您的具体模型名称
+                stream: false
+              }
+            })
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            
+            // 处理不同的RunPod响应格式
+            let content = '';
+            if (result.output) {
+              if (result.output.choices && result.output.choices[0]) {
+                content = result.output.choices[0].message?.content || result.output.choices[0].text || '';
+              } else if (result.output.text) {
+                content = result.output.text;
+              } else if (result.output.response) {
+                content = result.output.response;
+              } else if (typeof result.output === 'string') {
+                content = result.output;
+              }
+            }
+            
+            if (content) {
+              return {
+                success: true,
+                content: content.trim()
+              };
+            }
+          } else {
+            console.warn('RunPod API 响应错误:', response.status, await response.text());
+          }
+        } catch (runpodError) {
+          console.warn('RunPod API 调用失败:', runpodError);
+        }
+      }
+
+      // 备用方案：使用OpenAI
       if (this.env.OPENAI_API_KEY) {
         try {
+          console.log('RunPod不可用，使用OpenAI备用模型');
           const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -299,37 +364,8 @@ class ChatHistoryManager {
         }
       }
 
-      // 备用方案：尝试RunPod
-      if (this.env.RUNPOD_ENDPOINT_ID && this.env.RUNPOD_API_KEY) {
-        try {
-          const response = await fetch(`https://api.runpod.ai/v2/${this.env.RUNPOD_ENDPOINT_ID}/runsync`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${this.env.RUNPOD_API_KEY}`
-            },
-            body: JSON.stringify({
-              input: {
-                messages: messages,
-                max_tokens: 1000,
-                temperature: 0.7
-              }
-            })
-          });
-
-          if (response.ok) {
-            const result = await response.json();
-            return {
-              success: true,
-              content: result.output?.choices?.[0]?.message?.content || '抱歉，我无法生成回复。'
-            };
-          }
-        } catch (runpodError) {
-          console.warn('RunPod API 调用失败:', runpodError);
-        }
-      }
-
       // 最后的备用方案：智能模拟回复
+      console.log('所有AI模型都不可用，使用智能备用回复');
       return this.generateSmartFallbackResponse(messages);
 
     } catch (error) {
