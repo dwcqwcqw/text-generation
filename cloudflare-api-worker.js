@@ -822,18 +822,79 @@ export default {
           });
         }
 
-        // 文本预处理和语言检测
+        // 增强的文本预处理和语言检测
         function preprocessText(inputText) {
-          // 移除或替换可能导致问题的特殊字符
+          // 第一步：基础清理
           let cleanText = inputText
             .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // 移除控制字符
-            .replace(/[^\u0020-\u007E\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]/g, '') // 只保留基本拉丁字符、中文、日文
+            .replace(/[\u200B-\u200D\uFEFF]/g, '') // 移除零宽字符
             .replace(/\s+/g, ' ') // 规范化空格
             .trim();
           
-          // 限制文本长度（MiniMax限制）
-          if (cleanText.length > 2000) {
-            cleanText = cleanText.substring(0, 2000) + '...';
+                                // 第二步：字符替换（处理常见的特殊字符）
+           // 智能引号和单引号
+           cleanText = cleanText
+             .replace(/[""]/g, '"')
+             .replace(/['']/g, "'")
+             .replace(/[—–]/g, '-')
+             .replace(/…/g, '...')
+             .replace(/°/g, '度')
+             .replace(/×/g, 'x')
+             .replace(/÷/g, '/')
+             .replace(/±/g, '+/-')
+             .replace(/≈/g, '约')
+             .replace(/≤/g, '小于等于')
+             .replace(/≥/g, '大于等于')
+             .replace(/∞/g, '无穷大')
+             .replace(/€/g, '欧元')
+             .replace(/£/g, '英镑')
+             .replace(/¥/g, '元')
+             .replace(/\$/g, '美元')
+             .replace(/©/g, '版权')
+             .replace(/®/g, '注册商标')
+             .replace(/™/g, '商标')
+             .replace(/§/g, '节')
+             .replace(/¶/g, '段落')
+             .replace(/[†‡]/g, '')
+             .replace(/•/g, '·')
+             .replace(/→/g, '到')
+             .replace(/←/g, '从')
+             .replace(/↑/g, '上')
+             .replace(/↓/g, '下')
+             .replace(/[①②③④⑤⑥⑦⑧⑨⑩]/g, (match) => {
+               const nums = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+               return (nums.indexOf(match) + 1).toString();
+             });
+          
+          // 第三步：保留安全字符集
+          // 扩展安全字符范围，包括更多语言
+          cleanText = cleanText.replace(/[^\u0020-\u007E\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0100-\u017f\u1e00-\u1eff]/g, '');
+          
+          // 第四步：处理连续标点符号
+          cleanText = cleanText
+            .replace(/[，,]{2,}/g, '，') // 多个逗号
+            .replace(/[。.]{2,}/g, '。') // 多个句号
+            .replace(/[！!]{2,}/g, '！') // 多个感叹号
+            .replace(/[？?]{2,}/g, '？') // 多个问号
+            .replace(/[；;]{2,}/g, '；') // 多个分号
+            .replace(/[：:]{2,}/g, '：') // 多个冒号
+            .trim();
+          
+          // 第五步：限制文本长度
+          if (cleanText.length > 1500) { // 降低长度限制以提高成功率
+            cleanText = cleanText.substring(0, 1500);
+            // 尝试在句子边界截断
+            const lastPunctuation = Math.max(
+              cleanText.lastIndexOf('。'),
+              cleanText.lastIndexOf('！'),
+              cleanText.lastIndexOf('？'),
+              cleanText.lastIndexOf('.'),
+              cleanText.lastIndexOf('!'),
+              cleanText.lastIndexOf('?')
+            );
+            if (lastPunctuation > cleanText.length * 0.8) {
+              cleanText = cleanText.substring(0, lastPunctuation + 1);
+            }
           }
           
           return cleanText;
@@ -946,11 +1007,23 @@ export default {
             const errorText = await minimaxResponse.text();
             console.error(`MiniMax API错误 ${minimaxResponse.status}:`, errorText);
             
-            // 如果是字符编码错误，尝试OpenAI TTS作为备用
-            if (minimaxResponse.status === 400 && env.OPENAI_API_KEY) {
-              console.log('尝试OpenAI TTS备用方案...');
+            // 如果是字符编码或其他错误，尝试多种备用方案
+            if ((minimaxResponse.status === 400 || minimaxResponse.status === 500) && env.OPENAI_API_KEY) {
+              console.log('MiniMax失败，尝试OpenAI TTS备用方案...');
               
               try {
+                // 为OpenAI进一步清理文本
+                const openaiText = processedText
+                  .replace(/[^\u0020-\u007E\u4e00-\u9fff]/g, '') // 只保留基本字符
+                  .substring(0, 4000); // OpenAI限制
+                
+                const openaiVoiceMap = {
+                  'zh': 'alloy',
+                  'en': 'alloy',
+                  'ja': 'nova',
+                  'ko': 'shimmer'
+                };
+                
                 const openaiResponse = await fetch('https://api.openai.com/v1/audio/speech', {
                   method: 'POST',
                   headers: {
@@ -959,10 +1032,10 @@ export default {
                   },
                   body: JSON.stringify({
                     model: 'tts-1',
-                    input: processedText,
-                    voice: 'alloy', // OpenAI支持的声音
+                    input: openaiText,
+                    voice: openaiVoiceMap[detectedLang] || 'alloy',
                     response_format: 'mp3',
-                    speed: speed
+                    speed: Math.max(0.25, Math.min(4.0, speed))
                   })
                 });
 
@@ -974,12 +1047,79 @@ export default {
                       'Content-Type': 'audio/mpeg',
                       'Content-Disposition': 'inline; filename="speech.mp3"',
                       'X-TTS-Provider': 'openai',
-                      'X-TTS-Language': detectedLang
+                      'X-TTS-Language': detectedLang,
+                      'X-TTS-Fallback': 'true'
                     }
                   });
+                } else {
+                  console.error('OpenAI TTS也失败:', await openaiResponse.text());
                 }
               } catch (openaiError) {
                 console.error('OpenAI TTS备用方案也失败:', openaiError);
+              }
+            }
+            
+            // 如果所有方案都失败，尝试简化文本再试一次MiniMax
+            if (minimaxResponse.status === 400) {
+              console.log('尝试简化文本重新请求MiniMax...');
+              
+              try {
+                // 极简文本处理
+                const simpleText = processedText
+                  .replace(/[^\u4e00-\u9fff\u0020-\u007E]/g, '') // 只保留中文和基本英文
+                  .replace(/\s+/g, ' ')
+                  .trim()
+                  .substring(0, 500); // 大幅缩短
+                
+                if (simpleText.length > 10) {
+                  const simplePayload = {
+                    model: "speech-02-turbo",
+                    text: simpleText,
+                    stream: false,
+                    voice_setting: {
+                      voice_id: 'female-shaonv', // 使用默认声音
+                      speed: 1.0,
+                      vol: 1.0,
+                      pitch: 0
+                    },
+                    audio_setting: {
+                      sample_rate: 16000, // 降低采样率
+                      bitrate: 64000,     // 降低比特率
+                      format: "mp3",
+                      channel: 1
+                    }
+                  };
+                  
+                  const retryResponse = await fetch(minimaxUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${env.MINIMAX_API_KEY}`
+                    },
+                    body: JSON.stringify(simplePayload)
+                  });
+                  
+                  if (retryResponse.ok) {
+                    const retryResult = await retryResponse.json();
+                    if (retryResult.data && retryResult.data.audio) {
+                      const hexAudio = retryResult.data.audio;
+                      const audioBytes = new Uint8Array(hexAudio.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                      
+                      return new Response(audioBytes, {
+                        headers: { 
+                          ...corsHeaders, 
+                          'Content-Type': 'audio/mpeg',
+                          'Content-Disposition': 'inline; filename="speech.mp3"',
+                          'X-TTS-Language': detectedLang,
+                          'X-TTS-Voice': 'female-shaonv',
+                          'X-TTS-Simplified': 'true'
+                        }
+                      });
+                    }
+                  }
+                }
+              } catch (retryError) {
+                console.error('简化文本重试也失败:', retryError);
               }
             }
             
